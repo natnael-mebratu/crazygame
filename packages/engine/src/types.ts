@@ -12,8 +12,8 @@ export interface Card {
 /** Rule breaks that other players can catch with "Crazy!". */
 export type Foul =
   | 'wrong_match' // card matches neither the active suit nor the top rank
-  | 'wild_on_wild' // 8/J played directly on another live 8/J
-  | 'ignored_penalty' // didn't stack or take a pending 2 / A♠ penalty
+  | 'wild_on_wild' // 8/J changed the suit right after another 8/J changed it
+  | 'ignored_penalty' // (auto-caught) didn't stack or take a pending 2 / A♠ penalty
   | 'bad_combo' // multi-card drop that isn't a 7 + cards of the same suit
   | 'opening_combo' // combo used to open on an empty table
   | 'pass_without_draw'; // passed without drawing 1 first
@@ -23,6 +23,7 @@ export type DrawReason =
   | 'penalty' // took a pending 2 / A♠ stack
   | 'crazy' // caught by a correct Crazy call
   | 'out_of_turn' // auto-penalty from the system
+  | 'dodged_penalty' // auto: tried to skip a pending 2 / A♠ — owed + 4
   | 'false_call' // called Crazy on a legal move
   | 'snap_caught' // someone snapped you before you did
   | 'false_snap'; // snapped someone who doesn't have exactly 1 card

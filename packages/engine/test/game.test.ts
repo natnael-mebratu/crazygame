@@ -110,14 +110,26 @@ describe('Crazy calls', () => {
     expect(() => g.callCrazy('p0', 1)).toThrow(GameError);
   });
 
-  it('caught dodging a penalty: take the penalty + 4', () => {
+});
+
+describe('dodging a penalty (auto-caught)', () => {
+  it('card stays in hand, take owed + 4, then you still play your turn', () => {
     const g = setup({ hands: [['KS', ...PLAIN], PLAIN, PLAIN], top: '2S', pending: 2 });
-    play(g, 'p0', ['KS']);
-    expect(g.state.lastMove?.foul).toBe('ignored_penalty');
-    g.callCrazy('p1', 10);
-    expect(count(g, 'p0')).toBe(1 + PLAIN.length + 2 + 4);
+    const ev = play(g, 'p0', ['KS']);
+    expect(ev).toEqual([{ type: 'drew', playerId: 'p0', count: 6, reason: 'dodged_penalty' }]);
+    expect(top(g)).toBe('2S');
+    expect(count(g, 'p0')).toBe(1 + PLAIN.length + 6);
     expect(g.state.pendingPenalty).toBe(0);
-    expect(turnOf(g)).toBe('p1');
+    expect(turnOf(g)).toBe('p0');
+    play(g, 'p0', ['KS']); // now a normal, legal move
+    expect(g.state.lastMove?.foul).toBeNull();
+  });
+
+  it('passing on a penalty is caught the same way', () => {
+    const g = setup({ hands: [['KH'], PLAIN], top: '2S', pending: 2 });
+    g.pass('p0');
+    expect(count(g, 'p0')).toBe(7);
+    expect(turnOf(g)).toBe('p0');
   });
 });
 
@@ -173,17 +185,19 @@ describe('2 and A♠ penalties', () => {
   it('nothing goes on A♠, and A♠ cannot go on 2 of another suit', () => {
     const g = setup({ hands: [['2S', ...PLAIN], PLAIN], top: 'AS', pending: 5 });
     play(g, 'p0', ['2S']);
-    expect(g.state.lastMove?.foul).toBe('ignored_penalty');
+    expect(count(g, 'p0')).toBe(1 + PLAIN.length + 9);
+    expect(top(g)).toBe('AS');
 
     const g2 = setup({ hands: [['AS', ...PLAIN], PLAIN], top: '2H', pending: 2 });
     play(g2, 'p0', ['AS']);
-    expect(g2.state.lastMove?.foul).toBe('ignored_penalty');
+    expect(count(g2, 'p0')).toBe(1 + PLAIN.length + 6);
   });
 
   it('a wild cannot dodge a penalty', () => {
     const g = setup({ hands: [['8S', ...PLAIN], PLAIN], top: '2S', pending: 2 });
     play(g, 'p0', ['8S'], 'H');
-    expect(g.state.lastMove?.foul).toBe('ignored_penalty');
+    expect(top(g)).toBe('2S');
+    expect(count(g, 'p0')).toBe(1 + PLAIN.length + 6);
   });
 });
 
@@ -241,11 +255,20 @@ describe('8 and J wilds', () => {
     expect(g.state.lastMove?.foul).toBeNull();
   });
 
-  it('wild straight on a wild is a foul; after one normal play it is fine', () => {
+  it('right after a wild, an 8/J can drop but cannot change the suit', () => {
     const g = setup({ hands: [['8D', ...PLAIN], ['JC', ...PLAIN]], top: '9H' });
     play(g, 'p0', ['8D'], 'C');
     play(g, 'p1', ['JC'], 'H');
     expect(g.state.lastMove?.foul).toBe('wild_on_wild');
+
+    const ok = setup({ hands: [['JH', ...PLAIN], ['JS', ...PLAIN], ['8D', ...PLAIN]], top: '9H' });
+    play(ok, 'p0', ['JH'], 'S');
+    play(ok, 'p1', ['JS']); // "still spade"
+    expect(ok.state.lastMove?.foul).toBeNull();
+    expect(ok.state.activeSuit).toBe('S');
+    play(ok, 'p2', ['8D'], 'D'); // a normal play happened in between → may change
+    expect(ok.state.lastMove?.foul).toBeNull();
+    expect(ok.state.activeSuit).toBe('D');
 
     const g2 = setup({ hands: [['8D', 'JC', ...PLAIN], ['3C', ...PLAIN]], top: '9H' });
     play(g2, 'p0', ['8D'], 'C');

@@ -39,6 +39,9 @@ Passing without drawing is a foul.
 If a 2 / A♠ was played on you, you either **stack** on it (see below) or **take all
 the cards**. After taking them it is your **normal turn**: play, or draw 1 → play or pass.
 
+Trying anything else (another card, or passing) is **caught automatically**: your card
+goes back to your hand, you take **what you owed + 4**, and then you make your normal move.
+
 ## 4. Special cards
 
 | Card | Effect |
@@ -48,7 +51,7 @@ the cards**. After taking them it is your **normal turn**: play, or draw 1 → p
 | **5** | Skip the next player. |
 | **7** | Reverse direction. Another 7 reverses it back. |
 | **7 + same suit** | **Combo:** drop the 7 together with any cards of its suit. **No reverse**, and any 2 / A♠ in the combo **doesn't penalize**. |
-| **8 / J** | **Wild:** play on anything and name the new suit. Can't be played directly on another wild — one normal play has to happen in between. Can't be used to dodge a penalty. |
+| **8 / J** | **Wild:** play on anything and name the new suit. Right after another 8 / J you **can** still drop one, but it **can't change the suit** — it plays like a normal card (must match) and the suit stays. Can't be used to dodge a penalty. |
 
 ## 5. Crazy! (fouls)
 
@@ -57,20 +60,20 @@ Penalty for any foul: **+4 cards**, and the card(s) go back to your hand.
 ### Caught automatically
 - **Playing out of turn.** The card never reaches the table — the others only see
   that you took +4.
+- **Dodging a 2 / A♠ penalty.** Card goes back, you take owed + 4, and it's still your turn.
 
 ### Caught by players
 The app **doesn't stop you** from making these mistakes. If someone hits
 **CRAZY!** within ~4 seconds (or before the next move), you're caught:
 
 - wrong suit / rank
-- wild on a wild
-- not stacking or taking a pending penalty
+- an 8 / J changing the suit right after another 8 / J
 - a combo that isn't a 7 + same suit, or opening with a combo
 - passing without drawing
 
 | Outcome | Result |
 |---|---|
-| Right call | Move is undone, offender takes +4 (plus any penalty they dodged) and loses their turn. |
+| Right call | Move is undone, offender takes +4 and loses their turn. |
 | Wrong call (move was legal) | The caller takes +4. |
 | Nobody calls | The move stands. You got away with it. |
 

@@ -99,11 +99,18 @@ export class CrazyGame {
       return ev;
     }
 
+    // Dodging a pending 2 / A♠: also caught by the system. Card stays in
+    // hand, you take what you owed + 4, then you still play your turn.
+    if (s.pendingPenalty > 0 && this.evaluatePlay(cards, chosenSuit) !== null) {
+      this.dodgedPenalty(p, ev);
+      return ev;
+    }
+
     this.closeWindow(ev);
     if (s.status === 'finished') return ev;
 
     const opening = s.discard.length === 0;
-    const foul = this.evaluatePlay(cards, opening);
+    const foul = this.evaluatePlay(cards, chosenSuit, opening);
     const undo = this.snapshot();
 
     const played = new Set(cardIds);
@@ -169,12 +176,15 @@ export class CrazyGame {
     this.ensurePlaying();
     const s = this.state;
     if (this.current.id !== playerId) throw new GameError('Not your turn');
+    if (s.pendingPenalty > 0) {
+      this.dodgedPenalty(this.player(playerId), ev);
+      return ev;
+    }
 
     this.closeWindow(ev);
     if (s.status === 'finished') return ev;
 
-    const foul: Foul | null =
-      s.pendingPenalty > 0 ? 'ignored_penalty' : !s.hasDrawn ? 'pass_without_draw' : null;
+    const foul: Foul | null = !s.hasDrawn ? 'pass_without_draw' : null;
     const undo = this.snapshot();
 
     s.pendingPenalty = 0;
@@ -214,9 +224,7 @@ export class CrazyGame {
     s.lastMove = null;
     ev.push({ type: 'crazy', callerId, targetId: m.playerId, correct: true, foul: m.foul });
 
-    const owed = s.pendingPenalty;
-    s.pendingPenalty = 0;
-    this.give(offender, s.config.penalty + owed, 'crazy', ev);
+    this.give(offender, s.config.penalty, 'crazy', ev);
 
     s.hasDrawn = false;
     s.turn = this.indexOf(offender.id);
@@ -300,7 +308,11 @@ export class CrazyGame {
   // ───────────────────────────── rules ─────────────────────────────
 
   /** Is this drop legal? Returns the foul, or null. Never throws. */
-  evaluatePlay(cards: Card[], opening = this.state.discard.length === 0): Foul | null {
+  evaluatePlay(
+    cards: Card[],
+    chosenSuit?: Suit,
+    opening = this.state.discard.length === 0,
+  ): Foul | null {
     const s = this.state;
     const lead = cards[0];
     const combo = cards.length > 1;
@@ -319,8 +331,27 @@ export class CrazyGame {
       const aceOn2Spade = isAceOfSpades(lead) && top.rank === '2' && top.suit === 'S';
       return stacks2 || aceOn2Spade ? null : 'ignored_penalty';
     }
-    if (!combo && isWild(lead)) return s.wildCooldown ? 'wild_on_wild' : null;
-    return lead.suit === s.activeSuit || lead.rank === top.rank ? null : 'wrong_match';
+    const matches = lead.suit === s.activeSuit || lead.rank === top.rank;
+    if (!combo && isWild(lead)) {
+      if (!s.wildCooldown) return null;
+      // Right after a wild: an 8/J may drop as a plain card, but can't change the suit.
+      if (this.changesSuit(chosenSuit)) return 'wild_on_wild';
+      return matches ? null : 'wrong_match';
+    }
+    return matches ? null : 'wrong_match';
+  }
+
+  private changesSuit(chosenSuit?: Suit) {
+    return chosenSuit !== undefined && chosenSuit !== this.state.activeSuit;
+  }
+
+  /** Auto-caught: card stays in hand, take what you owed + 4, keep your turn. */
+  private dodgedPenalty(p: PlayerState, ev: GameEvent[]) {
+    const s = this.state;
+    const owed = s.pendingPenalty;
+    s.pendingPenalty = 0;
+    s.hasDrawn = false;
+    this.give(p, owed + s.config.penalty, 'dodged_penalty', ev);
   }
 
   private applyEffects(cards: Card[], chosenSuit: Suit | undefined, opening: boolean) {
@@ -342,7 +373,10 @@ export class CrazyGame {
     else if (isAceOfSpades(lead)) s.pendingPenalty += 5;
     else s.pendingPenalty = 0;
 
-    if (isWild(lead)) {
+    if (isWild(lead) && s.wildCooldown && !this.changesSuit(chosenSuit)) {
+      // Dead wild: suit stays, counts as the normal play in between.
+      s.wildCooldown = false;
+    } else if (isWild(lead)) {
       s.activeSuit = chosenSuit ?? lead.suit;
       s.wildCooldown = true;
     } else {
