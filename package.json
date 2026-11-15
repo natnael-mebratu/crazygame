@@ -1,0 +1,12 @@
+{
+  "name": "crazygame",
+  "private": true,
+  "description": "Crazy — the Ethiopian card game, played online with friends.",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "npm run test --workspaces",
+    "typecheck": "npm run typecheck --workspaces"
+  }
+}
