@@ -1,34 +1,82 @@
 # Crazy
 
 The Ethiopian card game — UNO's cousin, played with a normal deck — online with friends.
+One person creates a room, shares the link, everyone plays from their phone browser. No app install.
 
 Full rules: [RULES.md](RULES.md)
+
+## Run it on your computer
+
+Needs [Node.js](https://nodejs.org) 20 or newer.
+
+```bash
+npm install
+```
+
+```bash
+npm run build
+```
+
+```bash
+npm start
+```
+
+Open http://localhost:3001. To play with phones on the same Wi-Fi, open
+`http://<your-computer's-IP>:3001` on each phone.
+
+While changing code, `npm run dev` runs the server on :3001 and a hot-reloading
+app on http://localhost:5173.
+
+## Put it online
+
+It's one Node server (it serves the app too), so any host that runs Node or Docker works.
+
+**Render (free tier):** New → Web Service → connect this repo →
+Build command `npm install && npm run build`, Start command `npm start`.
+Render sets `PORT` automatically. Then share `https://<your-app>.onrender.com`.
+
+**Docker (Fly.io, Railway, a VPS…):** the included `Dockerfile` builds and runs everything:
+
+```bash
+docker build -t crazy .
+```
+
+```bash
+docker run -p 3001:3001 crazy
+```
+
+Games live in the server's memory: restarting the server ends running games.
 
 ## Layout
 
 ```
 packages/
-  engine/   Pure TypeScript rules engine (no network, no UI) + tests
+  engine/   The rules (pure TypeScript) + 36 rule tests
+  server/   Rooms, real-time play over WebSockets (Socket.IO)
+  web/      The phone app (React + Vite)
+scripts/
+  e2e.mjs   Plays full 4-player games in real browsers
 ```
 
-Coming next: `server/` (rooms + real-time play over WebSockets) and `web/` (the phone-friendly game table).
-
-## Develop
+## Tests
 
 ```bash
-npm install
-npm test          # run the rules tests
-npm run typecheck
+npm test
 ```
 
-## How the engine works
+```bash
+npm run e2e
+```
 
-`CrazyGame` is the single source of truth and runs on the server.
+`npm run e2e` needs the server running (`npm start`) and Playwright installed. It plays a whole
+game with 4 phone browsers — including a deliberate mistake caught with CRAZY!, SNAPs and a rematch.
 
-- **Actions:** `play`, `draw`, `pass`, `callCrazy`, `snap`, plus `tick(now)` from a timer.
-  Each returns a list of events to broadcast.
-- **Illegal moves are allowed.** Every move is checked and its foul is stored
-  privately. It's only punished if another player calls Crazy before the window
-  closes. Playing out of turn is the exception: it's penalized instantly.
-- **`viewFor(playerId)`** is what a client may see: your own hand, everyone else's
-  card counts, the table — never other hands or a move's foul.
+## How it works
+
+- **The server is the referee.** It holds the deck and every hand; each phone only receives its
+  own cards plus everyone's card counts.
+- **Mistakes are allowed.** Any move goes on the table. The server knows if it was illegal but only
+  punishes it if someone hits CRAZY! within 4 seconds (or before the next move). Playing out of turn
+  and dodging a 2 / A♠ are caught automatically.
+- **Refresh-proof.** Your seat is saved on your phone; reload or lose signal and you drop straight
+  back into the game. If you're gone on your turn for 15 seconds, the game draws and passes for you.

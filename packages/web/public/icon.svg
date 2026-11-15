@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="14" fill="#0D5C38"/>
+  <rect x="17" y="10" width="30" height="44" rx="4" fill="#FFFDF7" stroke="#E9C46A" stroke-width="2" transform="rotate(-8 32 32)"/>
+  <text x="32" y="42" font-family="Georgia, serif" font-size="26" font-weight="700" fill="#16161A" text-anchor="middle" transform="rotate(-8 32 32)">♠</text>
+</svg>
