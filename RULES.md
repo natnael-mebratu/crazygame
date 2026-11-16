@@ -60,6 +60,8 @@ Penalty for any foul: **+4 cards**, and the card(s) go back to your hand.
 ### Caught automatically
 - **Playing out of turn.** The card never reaches the table — the others only see
   that you took +4.
+  Exception: before the starter has dropped the first card, nobody is punished — the card
+  just comes back.
 - **Dodging a 2 / A♠ penalty.** Card goes back, you take owed + 4, and it's still your turn.
 
 ### Caught by players

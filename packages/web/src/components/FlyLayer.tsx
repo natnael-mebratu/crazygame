@@ -11,6 +11,8 @@ export interface Flight {
   r0: number;
   r1: number;
   delay: number;
+  /** Stays at the destination until removed (waiting for the server). */
+  hold?: boolean;
 }
 
 export function FlyLayer({ flights, onDone }: { flights: Flight[]; onDone: (id: number) => void }) {

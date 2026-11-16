@@ -10,9 +10,11 @@ interface Props {
   refs: MutableRefObject<Map<string, HTMLElement>>;
   meId: string;
   dim: boolean;
+  /** Not your turn: slightly dimmed (cards still work). */
+  waiting?: boolean;
 }
 
-export function Hand({ cards, selected, onTap, refs, meId, dim }: Props) {
+export function Hand({ cards, selected, onTap, refs, meId, dim, waiting }: Props) {
   const box = useRef<HTMLDivElement>(null);
   const [w, setW] = useState(360);
 
@@ -47,7 +49,7 @@ export function Hand({ cards, selected, onTap, refs, meId, dim }: Props) {
   return (
     <div
       ref={box}
-      className={`hand${scroll ? ' scroll' : ''}${dim ? ' dim' : ''}`}
+      className={`hand${scroll ? ' scroll' : ''}${dim ? ' dim' : ''}${waiting ? ' waiting' : ''}`}
       data-seat={meId}
       style={{ height: boxH }}
     >

@@ -104,6 +104,8 @@ export class CrazyGame {
     // Out of turn: caught by the system. The card never hits the table;
     // others only learn that this player took +4.
     if (this.current.id !== playerId) {
+      // Before the first card is down nobody is punished: just wait for the starter.
+      if (s.discard.length === 0) throw new GameError(`${this.current.name} starts — wait for the first card`);
       this.give(p, s.config.penalty, 'out_of_turn', ev);
       return ev;
     }

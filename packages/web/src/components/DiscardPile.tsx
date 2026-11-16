@@ -1,11 +1,20 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type MutableRefObject } from 'react';
 import type { Card, ClientView } from '@crazy/engine';
 import { CardFace, tilt } from './Cards';
 
 /** Matches the fly-in animation so the new top card appears as it lands. */
 export const LAND_MS = 340;
 
-export function DiscardPile({ top, window: win }: { top: Card | null; window: ClientView['crazyWindow'] }) {
+export function DiscardPile({
+  top,
+  window: win,
+  instant,
+}: {
+  top: Card | null;
+  window: ClientView['crazyWindow'];
+  /** Your own cards already flew here: show them without the landing delay. */
+  instant: MutableRefObject<Set<string>>;
+}) {
   const [shown, setShown] = useState<Card | null>(top);
   const [under, setUnder] = useState<Card[]>([]);
   const shownRef = useRef(shown);
@@ -21,7 +30,7 @@ export function DiscardPile({ top, window: win }: { top: Card | null; window: Cl
         return prev ? [...u, prev].slice(-2) : u;
       });
       setShown(top);
-    }, LAND_MS);
+    }, top && instant.current.has(top.id) ? 0 : LAND_MS);
     return () => clearTimeout(t);
   }, [top?.id]);
 

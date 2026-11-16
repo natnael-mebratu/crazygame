@@ -174,6 +174,13 @@ describe('dodging a penalty (auto-caught)', () => {
 });
 
 describe('out of turn', () => {
+  it('before the first card is down: no penalty, just wait for the starter', () => {
+    const g = setup({ hands: [PLAIN, ['9S', ...PLAIN]] });
+    expect(() => play(g, 'p1', ['9S'])).toThrow('P0 starts');
+    expect(count(g, 'p1')).toBe(PLAIN.length + 1);
+    expect(turnOf(g)).toBe('p0');
+  });
+
   it('is caught instantly: +4, card stays hidden in hand', () => {
     const g = setup({ hands: [PLAIN, ['9S', ...PLAIN]], top: '4S' });
     const ev = play(g, 'p1', ['9S']);

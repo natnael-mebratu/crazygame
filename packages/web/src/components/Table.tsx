@@ -34,9 +34,12 @@ export function Table({ room, view, batch, onLeave }: Props) {
   );
   const isAway = (id: string) => room.players.find((p) => p.id === id)?.connected === false;
 
-  const hand = useMemo(() => sortHand(view.you.hand), [view.you.hand]);
+  // Cards you just dropped leave your hand at once, before the server answers.
+  const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const hand = useMemo(() => sortHand(view.you.hand).filter((c) => !hidden.has(c.id)), [view.you.hand, hidden]);
   const byId = (id: string) => hand.find((c) => c.id === id);
   const myTurn = view.turnPlayerId === me && view.status === 'playing';
+  const pending = view.pendingPenalty;
   const meIdx = players.findIndex((p) => p.id === me);
   const opponents = [...players.slice(meIdx + 1), ...players.slice(0, meIdx)];
 
@@ -48,7 +51,11 @@ export function Table({ room, view, batch, onLeave }: Props) {
   const [error, setError] = useState<{ id: number; text: string } | null>(null);
   const [lastPlayer, setLastPlayer] = useState<string | null>(null);
   const cardEls = useRef(new Map<string, HTMLElement>());
-  const tapPoints = useRef(new Map<string, { x: number; y: number }>());
+  /** Card ids already flown to the pile locally (no second flight when the server confirms). */
+  const flown = useRef(new Set<string>());
+  /** Draw flights already shown locally. */
+  const drawFlown = useRef(0);
+  const [busy, setBusy] = useState(false);
   const seq = useRef(0);
 
   // Drop selected cards that are no longer in hand.
@@ -66,15 +73,26 @@ export function Table({ room, view, batch, onLeave }: Props) {
     prevTurn.current = view.turnPlayerId;
   }, [view.turnPlayerId, me]);
 
-  // A new game (rematch) starts with an empty table: clear the old feed.
-  const prevDiscard = useRef(view.discardCount);
+  // New game (first open, or a rematch): clean feed and announce who starts.
+  const prevDiscard = useRef<number | null>(null);
   useEffect(() => {
-    if (view.discardCount === 0 && prevDiscard.current > 0) {
+    const fresh = view.discardCount === 0 && view.status === 'playing';
+    if (fresh && (prevDiscard.current === null || prevDiscard.current > 0)) {
       setFeed([]);
       setLastPlayer(null);
       setSel([]);
+      const starter = view.turnPlayerId;
+      const first = nameOf(starter).split(' ')[0];
+      setFlash({
+        id: ++seq.current,
+        title: starter === me ? 'You start!' : `${first} starts`,
+        sub: starter === me ? 'Play any card' : 'Wait for the first card',
+        tone: 'good',
+      });
+      if (starter === me) buzz(30);
     }
     prevDiscard.current = view.discardCount;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view.discardCount]);
 
   // Turn server events into feed lines, stamps and flying cards.
@@ -99,14 +117,18 @@ export function Table({ room, view, batch, onLeave }: Props) {
         setLastPlayer(e.playerId);
         const to = center(pileEl('discard'));
         e.cards.forEach((c, i) => {
-          const from = (e.playerId === me && tapPoints.current.get(c.id)) || center(seatEl(e.playerId));
-          tapPoints.current.delete(c.id);
+          if (flown.current.has(c.id)) return; // already flew when you tapped
+          const from = center(seatEl(e.playerId));
           if (from && to) {
             fl.push({ id: ++seq.current, card: c, from, to, w: pileW, r0: tilt(c.id, 25), r1: tilt(c.id, 5), delay: i * 90 });
           }
         });
       }
       if (e.type === 'drew' && e.count > 0) {
+        if (e.playerId === me && (e.reason === 'draw' || e.reason === 'penalty') && drawFlown.current > 0) {
+          drawFlown.current = 0;
+          continue;
+        }
         const from = center(pileEl('draw'));
         const to = center(seatEl(e.playerId));
         if (from && to) {
@@ -137,16 +159,70 @@ export function Table({ room, view, batch, onLeave }: Props) {
   const act = async (p: Promise<AckResult>) => {
     const r = await p;
     if (!r.ok) setError({ id: ++seq.current, text: r.error });
+    return r;
   };
 
-  const playIds = (ids: string[], suit?: Suit) => {
-    for (const id of ids) {
-      const c = center(cardEls.current.get(id));
-      if (c) tapPoints.current.set(id, c);
-    }
+  const pileW = () => (pileEl('discard') as HTMLElement | null)?.offsetWidth ?? 64;
+
+  /** Drop cards: they fly at once; the server confirms (or they come back). */
+  const playIds = async (ids: string[], suit?: Suit) => {
+    const t0 = Date.now();
+    const to = center(pileEl('discard'));
+    const w = pileW();
+    const fl: Flight[] = [];
+    ids.forEach((id, i) => {
+      const c = byId(id);
+      const from = center(cardEls.current.get(id));
+      flown.current.add(id);
+      if (c && from && to) {
+        fl.push({ id: ++seq.current, card: c, from, to, w, r0: tilt(c.id, 25), r1: tilt(c.id, 5), delay: i * 90, hold: true });
+      }
+    });
     setSel([]);
     setPicker(null);
-    act(send('game:play', { cardIds: ids, suit }));
+    setHidden((h) => new Set([...h, ...ids]));
+    setFlights((f) => [...f, ...fl]);
+
+    await act(send('game:play', { cardIds: ids, suit }));
+
+    // Let the flight finish, then hand back anything the server didn't take.
+    const wait = 340 + (ids.length - 1) * 90 - (Date.now() - t0);
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    setFlights((f) => f.filter((x) => !fl.some((y) => y.id === x.id)));
+    setHidden((h) => {
+      const n = new Set(h);
+      ids.forEach((id) => n.delete(id));
+      return n;
+    });
+    setTimeout(() => ids.forEach((id) => flown.current.delete(id)), 1500);
+  };
+
+  const draw = async () => {
+    if (busy) return;
+    if (myTurn && (pending > 0 || !view.hasDrawn)) {
+      const n = Math.min(pending > 0 ? pending : 1, 6);
+      const from = center(pileEl('draw'));
+      const to = center(seatEl(me));
+      if (from && to) {
+        const w = pileW();
+        setFlights((f) => [
+          ...f,
+          ...Array.from({ length: n }, (_, i) => ({ id: ++seq.current, from, to, w, r0: 0, r1: tilt(String(i), 12), delay: i * 70 })),
+        ]);
+        drawFlown.current = n;
+      }
+    }
+    setBusy(true);
+    await act(send('game:draw'));
+    setBusy(false);
+    setTimeout(() => (drawFlown.current = 0), 1500);
+  };
+
+  const pass = async () => {
+    if (busy) return;
+    setBusy(true);
+    await act(send('game:pass'));
+    setBusy(false);
   };
 
   const drop = (ids: string[]) => {
@@ -175,7 +251,6 @@ export function Table({ room, view, batch, onLeave }: Props) {
 
   const win = view.crazyWindow;
   const canCall = !!win && win.playerId !== me;
-  const pending = view.pendingPenalty;
   const turnName = nameOf(view.turnPlayerId);
 
   let status: string;
@@ -184,10 +259,11 @@ export function Table({ room, view, batch, onLeave }: Props) {
     else if (view.hasDrawn) status = 'Your turn — play or pass';
     else status = 'Your turn';
   } else {
-    status = `${turnName}'s turn`;
+    status = `${turnName}'s turn — wait`;
   }
 
   const selCards = sel.map(byId).filter(Boolean) as Card[];
+  const sameSuitRest = selCards.length ? hand.filter((c) => c.suit === selCards[0].suit && !sel.includes(c.id)) : [];
 
   // Seats: a band across the top of the table, in turn order from your left.
   const k = opponents.length;
@@ -253,7 +329,7 @@ export function Table({ room, view, batch, onLeave }: Props) {
                 className={`draw-pile${myTurn && (!view.hasDrawn || pending) ? ' ready' : ''}`}
                 data-pile="draw"
                 aria-label={pending && myTurn ? `Take ${pending} cards` : 'Draw a card'}
-                onClick={() => act(send('game:draw'))}
+                onClick={draw}
               >
                 <CardBack className="pile-card" style={{ transform: 'translate(4px,4px)' }} />
                 <CardBack className="pile-card" style={{ transform: 'translate(2px,2px)' }} />
@@ -262,7 +338,7 @@ export function Table({ room, view, batch, onLeave }: Props) {
               <span className="pile-label">{view.drawCount} left</span>
             </div>
             <div className="pile-col">
-              <DiscardPile top={view.top} window={win} />
+              <DiscardPile top={view.top} window={win} instant={flown} />
               <span className="pile-label">{view.discardCount ? `${view.discardCount} played` : 'Start here'}</span>
             </div>
           </div>
@@ -304,10 +380,10 @@ export function Table({ room, view, batch, onLeave }: Props) {
       </section>
 
       <section className="actions">
-        <button className="btn outline act" disabled={!myTurn || (view.hasDrawn && !pending)} onClick={() => act(send('game:draw'))}>
+        <button className="btn outline act" disabled={!myTurn || busy || (view.hasDrawn && !pending)} onClick={draw}>
           {pending && myTurn ? `Take +${pending}` : 'Draw'}
         </button>
-        <button className="btn outline act" disabled={!myTurn} onClick={() => act(send('game:pass'))}>
+        <button className="btn outline act" disabled={!myTurn || busy} onClick={pass}>
           Pass
         </button>
         <button className="btn crazy act" disabled={!canCall} onClick={() => act(send('game:crazy'))}>
@@ -327,6 +403,11 @@ export function Table({ room, view, batch, onLeave }: Props) {
             <span>
               {selCards.length > 1 ? `Combo: ${selCards.map(label).join(' ')}` : `Tap ${label(selCards[0])} again to drop`}
             </span>
+            {selCards[0].rank === '7' && sameSuitRest.length > 0 && (
+              <button className="mini-btn" onClick={() => setSel([...sel, ...sameSuitRest.map((c) => c.id)])}>
+                + all {SYM[selCards[0].suit]}
+              </button>
+            )}
             <button className="mini-btn gold" onClick={() => drop(sel)}>
               Drop{selCards.length > 1 ? ` ${selCards.length}` : ''}
             </button>
@@ -339,13 +420,13 @@ export function Table({ room, view, batch, onLeave }: Props) {
         )}
       </div>
 
-      <Hand cards={hand} selected={sel} onTap={tap} refs={cardEls} meId={me} dim={view.status !== 'playing'} />
+      <Hand cards={hand} selected={sel} onTap={tap} refs={cardEls} meId={me} dim={view.status !== 'playing'} waiting={!myTurn} />
 
-      <FlyLayer flights={flights} onDone={(id) => setFlights((f) => f.filter((x) => x.id !== id))} />
+      <FlyLayer flights={flights} onDone={(id) => setFlights((f) => f.filter((x) => x.id !== id || x.hold))} />
 
       {flash && (
         <div key={flash.id} className={`stamp ${flash.tone}`} role="status">
-          <strong>{flash.title}</strong>
+          <strong className={flash.title.length > 11 ? 'long' : ''}>{flash.title}</strong>
           <span>{flash.sub}</span>
         </div>
       )}
