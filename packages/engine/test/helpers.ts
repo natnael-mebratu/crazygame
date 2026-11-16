@@ -28,7 +28,7 @@ export const WINDOW = 4000;
 export function setup(o: Setup): CrazyGame {
   const g = new CrazyGame(
     o.hands.map((_, i) => ({ id: `p${i}`, name: `P${i}` })),
-    { rng: mulberry32(7), starterIndex: 0, crazyWindowMs: WINDOW },
+    { rng: mulberry32(7), starterIndex: 0, crazyWindowMs: WINDOW, finalCardWindowMs: WINDOW },
   );
   const s = g.state;
   s.players.forEach((p, i) => (p.hand = o.hands[i].map(card)));

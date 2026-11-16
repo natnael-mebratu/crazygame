@@ -82,6 +82,46 @@ describe('matching', () => {
   });
 });
 
+describe('Crazy window (default: until the next move)', () => {
+  const live = (hands: string[][], top: string) => {
+    const g = new CrazyGame(
+      hands.map((_, i) => ({ id: `p${i}`, name: `P${i}` })),
+      { rng: mulberry32(3), starterIndex: 0 },
+    );
+    const t = setup({ hands, top });
+    g.state = { ...t.state, config: g.state.config };
+    return g;
+  };
+
+  it('stays open however long the next player thinks', () => {
+    const g = live([['QC', ...PLAIN], PLAIN], 'AS');
+    play(g, 'p0', ['QC'], undefined, 0);
+    g.tick(60_000);
+    expect(g.viewFor('p1').crazyWindow).toEqual({ moveId: 1, playerId: 'p0', closesAt: null });
+    g.callCrazy('p1', 60_000);
+    expect(top(g)).toBe('AS');
+    expect(hand(g, 'p0')).toContain('QC');
+  });
+
+  it('A♠ → take +5 → wrong-suit card can be called (reported case)', () => {
+    const g = live([['AS', ...PLAIN], ['QC', ...PLAIN]], '9S');
+    play(g, 'p0', ['AS'], undefined, 0);
+    g.draw('p1', 1000); // takes 5
+    play(g, 'p1', ['QC'], undefined, 2000); // clubs on spades
+    expect(g.state.lastMove?.foul).toBe('wrong_match');
+    const ev = g.callCrazy('p0', 9000);
+    expect(ev).toContainEqual({ type: 'crazy', callerId: 'p0', targetId: 'p1', correct: true, foul: 'wrong_match' });
+  });
+
+  it('a winning card only waits 5 seconds', () => {
+    const g = live([['9S'], PLAIN], '4S');
+    play(g, 'p0', ['9S'], undefined, 0);
+    expect(g.viewFor('p1').crazyWindow?.closesAt).toBe(5000);
+    g.tick(5000);
+    expect(g.state.winner).toBe('p0');
+  });
+});
+
 describe('Crazy calls', () => {
   it('a correct call undoes the move, gives +4 and ends the turn', () => {
     const g = setup({ hands: [['KH', ...PLAIN], PLAIN, PLAIN], top: '4S' });

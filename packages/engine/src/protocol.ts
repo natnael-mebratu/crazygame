@@ -19,7 +19,8 @@ export interface RoomState {
 
 /** The engine's view, with the Crazy window as time remaining (no clock skew). */
 export interface ClientView extends Omit<PlayerView, 'crazyWindow'> {
-  crazyWindow: { moveId: number; playerId: string; remainingMs: number; totalMs: number } | null;
+  /** remainingMs null = open until the next move (only a winning card has a timer). */
+  crazyWindow: { moveId: number; playerId: string; remainingMs: number | null; totalMs: number | null } | null;
 }
 
 export interface Session {

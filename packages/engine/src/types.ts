@@ -60,7 +60,9 @@ export interface LastMove {
 }
 
 export interface GameConfig {
-  crazyWindowMs: number;
+  /** null = open until the next move. */
+  crazyWindowMs: number | null;
+  finalCardWindowMs: number;
   penalty: number;
 }
 
@@ -112,7 +114,8 @@ export interface PlayerView {
   pendingPenalty: number;
   wildCooldown: boolean;
   hasDrawn: boolean;
-  crazyWindow: { moveId: number; playerId: string; closesAt: number } | null;
+  /** closesAt null = open until the next move. */
+  crazyWindow: { moveId: number; playerId: string; closesAt: number | null } | null;
   status: 'playing' | 'finished';
   winner: string | null;
 }

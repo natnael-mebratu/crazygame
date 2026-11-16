@@ -35,7 +35,9 @@ export function DiscardPile({ top, window: win }: { top: Card | null; window: Cl
       ) : (
         <div className="pile-empty">Empty table</div>
       )}
-      {win && <Countdown key={win.moveId} remainingMs={win.remainingMs} totalMs={win.totalMs} />}
+      {win && win.remainingMs !== null && win.totalMs !== null && (
+        <Countdown key={win.moveId} remainingMs={win.remainingMs} totalMs={win.totalMs} />
+      )}
     </div>
   );
 }

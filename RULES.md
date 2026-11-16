@@ -64,7 +64,7 @@ Penalty for any foul: **+4 cards**, and the card(s) go back to your hand.
 
 ### Caught by players
 The app **doesn't stop you** from making these mistakes. If someone hits
-**CRAZY!** within ~4 seconds (or before the next move), you're caught:
+**CRAZY!** before the next move is made, you're caught:
 
 - wrong suit / rank
 - an 8 / J changing the suit right after another 8 / J
@@ -91,5 +91,6 @@ Keep the top played card, shuffle the rest, and they become the new draw pile.
 
 ## 8. Winning
 
-First to an **empty hand** wins — once the Crazy window on that last card closes.
+First to an **empty hand** wins — the others get **5 seconds** to call Crazy on that
+last card before the win counts.
 The last card can be anything.

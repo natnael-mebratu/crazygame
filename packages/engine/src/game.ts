@@ -18,8 +18,13 @@ export interface GameOptions {
   rng?: () => number;
   /** Index of the player who starts (gets 7 cards). Random if omitted. */
   starterIndex?: number;
-  /** How long after a move players can call Crazy on it. Default 4000ms. */
-  crazyWindowMs?: number;
+  /**
+   * How long after a move players can call Crazy on it.
+   * Default null: open until the next move happens.
+   */
+  crazyWindowMs?: number | null;
+  /** Window on a player's last card before their win counts. Default 5000ms. */
+  finalCardWindowMs?: number;
   /** Cards drawn for a foul. Default 4. */
   penalty?: number;
 }
@@ -54,7 +59,11 @@ export class CrazyGame {
     }));
 
     this.state = {
-      config: { crazyWindowMs: opts.crazyWindowMs ?? 4000, penalty: opts.penalty ?? 4 },
+      config: {
+        crazyWindowMs: opts.crazyWindowMs === undefined ? null : opts.crazyWindowMs,
+        finalCardWindowMs: opts.finalCardWindowMs ?? 5000,
+        penalty: opts.penalty ?? 4,
+      },
       players: dealt,
       drawPile: deck,
       discard: [],
@@ -267,9 +276,18 @@ export class CrazyGame {
 
   /** Call from a server timer so the Crazy window (and a pending win) closes on time. */
   tick(now = Date.now(), ev: GameEvent[] = []): GameEvent[] {
-    const m = this.state.lastMove;
-    if (m && now - m.at >= this.state.config.crazyWindowMs) this.closeWindow(ev);
+    const closesAt = this.windowClosesAt();
+    if (closesAt !== null && now >= closesAt) this.closeWindow(ev);
     return ev;
+  }
+
+  /** When the current Crazy window closes by itself; null = no window, or open until the next move. */
+  windowClosesAt(): number | null {
+    const m = this.state.lastMove;
+    if (!m) return null;
+    const { crazyWindowMs, finalCardWindowMs } = this.state.config;
+    const limit = m.winnerPending ? finalCardWindowMs : crazyWindowMs;
+    return limit === null ? null : m.at + limit;
   }
 
   // ───────────────────────────── views ─────────────────────────────
@@ -295,7 +313,7 @@ export class CrazyGame {
       pendingPenalty: s.pendingPenalty,
       wildCooldown: s.wildCooldown,
       hasDrawn: s.hasDrawn,
-      crazyWindow: m ? { moveId: m.id, playerId: m.playerId, closesAt: m.at + s.config.crazyWindowMs } : null,
+      crazyWindow: m ? { moveId: m.id, playerId: m.playerId, closesAt: this.windowClosesAt() } : null,
       status: s.status,
       winner: s.winner,
     };

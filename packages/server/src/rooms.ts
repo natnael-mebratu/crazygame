@@ -125,9 +125,9 @@ class Room {
     const g = this.game;
     if (!g || this.status !== 'playing') return;
 
-    const m = g.state.lastMove;
-    if (m) {
-      const wait = Math.max(0, m.at + g.state.config.crazyWindowMs - Date.now()) + 15;
+    const closesAt = g.windowClosesAt();
+    if (closesAt !== null) {
+      const wait = Math.max(0, closesAt - Date.now()) + 15;
       this.windowTimer = setTimeout(() => this.after(g.tick(Date.now())), wait);
     }
     const cur = this.members.find((x) => x.id === g.current.id);
@@ -186,8 +186,8 @@ class Room {
         ? {
             moveId: w.moveId,
             playerId: w.playerId,
-            remainingMs: Math.max(0, w.closesAt - Date.now()),
-            totalMs: g.state.config.crazyWindowMs,
+            remainingMs: w.closesAt === null ? null : Math.max(0, w.closesAt - Date.now()),
+            totalMs: w.closesAt === null ? null : g.state.config.finalCardWindowMs,
           }
         : null,
     };

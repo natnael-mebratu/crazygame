@@ -38,20 +38,25 @@ export function Hand({ cards, selected, onTap, refs, meId, dim }: Props) {
   const total = step * (n - 1) + cw;
   const start = scroll ? 10 : (w - total) / 2;
   const lift = Math.round(cw * 0.32);
+  const arcK = fan ? Math.min(1.6, 14 / Math.max(n, 1)) : 0;
+  const maxD = (n - 1) / 2;
+  // Room above for a lifted card, below for the deepest point of the fan.
+  const top0 = lift + 6;
+  const boxH = Math.ceil(top0 + maxD * maxD * arcK + ch + 10);
 
   return (
     <div
       ref={box}
       className={`hand${scroll ? ' scroll' : ''}${dim ? ' dim' : ''}`}
       data-seat={meId}
-      style={{ height: ch + 44 }}
+      style={{ height: boxH }}
     >
-      <div className="hand-inner" style={{ width: scroll ? total + 20 : '100%', height: ch + 44 }}>
+      <div className="hand-inner" style={{ width: scroll ? total + 20 : '100%', height: boxH }}>
         {cards.map((c, i) => {
           const d = i - (n - 1) / 2;
           const picked = selected.includes(c.id);
           const rot = fan ? d * Math.min(4, 24 / Math.max(n, 1)) : 0;
-          const arc = fan ? d * d * Math.min(2.2, 22 / Math.max(n, 1)) : 0;
+          const arc = d * d * arcK;
           return (
             <button
               key={c.id}
@@ -66,7 +71,7 @@ export function Hand({ cards, selected, onTap, refs, meId, dim }: Props) {
               onClick={() => onTap(c)}
               style={{
                 left: start + i * step,
-                top: 30 + arc - (picked ? lift : 0),
+                top: top0 + arc - (picked ? lift : 0),
                 transform: `rotate(${rot}deg)`,
                 width: cw,
                 height: ch,

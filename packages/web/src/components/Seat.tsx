@@ -30,10 +30,29 @@ export interface SeatProps {
   active: boolean;
   away: boolean;
   justPlayed: boolean;
+  /** Many players: avatar + name + count badge, no fan. */
+  compact?: boolean;
   style: CSSProperties;
 }
 
-export function Seat({ id, name, count, snap, active, away, justPlayed, style }: SeatProps) {
+export function Seat({ id, name, count, snap, active, away, justPlayed, compact, style }: SeatProps) {
+  if (compact) {
+    const last = count === 1;
+    return (
+      <div
+        className={`seat compact${active ? ' active' : ''}${away ? ' away' : ''}${last && snap === 'open' ? ' racing' : ''}`}
+        style={style}
+        data-seat={id}
+      >
+        <div className="seat-av">
+          <Avatar id={id} name={name} size={34} />
+          <span className={`badge${last ? (snap === 'safe' ? ' safe' : ' last') : ''}`}>{count}</span>
+        </div>
+        <span className="seat-name">{away ? `${name} · away` : name}</span>
+        {justPlayed && <span className="seat-ping" />}
+      </div>
+    );
+  }
   const shown = Math.min(count, 8);
   const spread = shown > 1 ? Math.min(9, 44 / (shown - 1)) : 0;
   const width = 26 + spread * (shown - 1);

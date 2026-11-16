@@ -174,7 +174,23 @@ export function Table({ room, view, batch, onLeave }: Props) {
   }
 
   const selCards = sel.map(byId).filter(Boolean) as Card[];
+
+  // Seats: a band across the top of the table, in turn order from your left.
   const k = opponents.length;
+  const compact = k >= 4;
+  const zigzag = k >= 6;
+  const seatPos = opponents.map((_, i) => {
+    if (k === 1) return { x: 50, y: 50 };
+    const t = i / (k - 1);
+    if (compact) {
+      const th = ((160 - t * 140) * Math.PI) / 180;
+      return { x: 9 + 82 * t, y: 36 + (1 - Math.sin(th)) * 26 + (zigzag && i % 2 ? 46 : 0) };
+    }
+    const spread = Math.min(140, 50 * (k - 1));
+    const th = ((90 + spread / 2 - t * spread) * Math.PI) / 180;
+    return { x: 50 + 38 * Math.cos(th), y: 50 + (1 - Math.sin(th)) * 44 };
+  });
+  const seatBand = Math.max(...seatPos.map((p) => p.y), 0) + (compact ? 38 : 50);
 
   return (
     <main className="game">
@@ -199,12 +215,8 @@ export function Table({ room, view, batch, onLeave }: Props) {
           <div className="felt-line" />
         </div>
 
-        {opponents.map((p, i) => {
-          // Spread opponents over the top arc, in turn order from your left.
-          const th = ((188 - ((i + 1) * 196) / (k + 1)) * Math.PI) / 180;
-          const x = 50 + 37 * Math.cos(th);
-          const y = 40 - 30 * Math.sin(th);
-          return (
+        <div className="seats" style={{ height: seatBand }}>
+          {opponents.map((p, i) => (
             <Seat
               key={p.id}
               id={p.id}
@@ -213,49 +225,57 @@ export function Table({ room, view, batch, onLeave }: Props) {
               snap={p.snap}
               active={view.turnPlayerId === p.id}
               away={isAway(p.id)}
+              compact={compact}
               justPlayed={lastPlayer === p.id && !!win && win.playerId === p.id}
-              style={{ left: `${x}%`, top: `${y}%` }}
+              style={{ left: `${seatPos[i].x}%`, top: seatPos[i].y }}
             />
-          );
-        })}
-
-        <div className="center-piles">
-          <button
-            className={`draw-pile${myTurn && (!view.hasDrawn || pending) ? ' ready' : ''}`}
-            data-pile="draw"
-            aria-label={pending && myTurn ? `Take ${pending} cards` : 'Draw a card'}
-            onClick={() => act(send('game:draw'))}
-          >
-            <CardBack className="pile-card" style={{ transform: 'translate(4px,4px)' }} />
-            <CardBack className="pile-card" style={{ transform: 'translate(2px,2px)' }} />
-            <CardBack className="pile-card" />
-            <span className="pile-count">{view.drawCount} left</span>
-          </button>
-          <DiscardPile top={view.top} window={win} />
-        </div>
-
-        <div className="chips">
-          {view.activeSuit && (
-            <span className={`chip suit${isRed(view.activeSuit) ? ' red' : ''}`}>
-              <b>{SYM[view.activeSuit]}</b> {SUIT_NAME[view.activeSuit]}
-            </span>
-          )}
-          <span className="chip outline">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ transform: view.direction === -1 ? 'scaleX(-1)' : undefined }}>
-              <path d="M20 12a8 8 0 1 1-2.34-5.66" />
-              <path d="M20 4v5h-5" />
-            </svg>
-            {view.direction === 1 ? 'Clockwise' : 'Reversed'}
-          </span>
-          {pending > 0 && <span className="chip danger">+{pending} pending</span>}
-        </div>
-
-        <div className="feed" aria-live="polite">
-          {feed.map((l, i) => (
-            <div key={l.id} className={`feed-line ${l.tone}${i === 0 ? ' latest' : ''}`}>
-              {l.text}
-            </div>
           ))}
+        </div>
+
+        <div className="table-center">
+          <div className="piles-row">
+            <div className="pile-col">
+              <button
+                className={`draw-pile${myTurn && (!view.hasDrawn || pending) ? ' ready' : ''}`}
+                data-pile="draw"
+                aria-label={pending && myTurn ? `Take ${pending} cards` : 'Draw a card'}
+                onClick={() => act(send('game:draw'))}
+              >
+                <CardBack className="pile-card" style={{ transform: 'translate(4px,4px)' }} />
+                <CardBack className="pile-card" style={{ transform: 'translate(2px,2px)' }} />
+                <CardBack className="pile-card" />
+              </button>
+              <span className="pile-label">{view.drawCount} left</span>
+            </div>
+            <div className="pile-col">
+              <DiscardPile top={view.top} window={win} />
+              <span className="pile-label">{view.discardCount ? `${view.discardCount} played` : 'Start here'}</span>
+            </div>
+          </div>
+
+          <div className="chips">
+            {view.activeSuit && (
+              <span className={`chip suit${isRed(view.activeSuit) ? ' red' : ''}`}>
+                <b>{SYM[view.activeSuit]}</b> {SUIT_NAME[view.activeSuit]}
+              </span>
+            )}
+            <span className="chip outline">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ transform: view.direction === -1 ? 'scaleX(-1)' : undefined }}>
+                <path d="M20 12a8 8 0 1 1-2.34-5.66" />
+                <path d="M20 4v5h-5" />
+              </svg>
+              {view.direction === 1 ? 'Clockwise' : 'Reversed'}
+            </span>
+            {pending > 0 && <span className="chip danger">+{pending} pending</span>}
+          </div>
+
+          <div className="feed" aria-live="polite">
+            {feed.slice(0, 2).map((l, i) => (
+              <div key={l.id} className={`feed-line ${l.tone}${i === 0 ? ' latest' : ''}`}>
+                {l.text}
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 

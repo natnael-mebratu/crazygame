@@ -51,7 +51,7 @@ Games live in the server's memory: restarting the server ends running games.
 
 ```
 packages/
-  engine/   The rules (pure TypeScript) + 36 rule tests
+  engine/   The rules (pure TypeScript) + 39 rule tests
   server/   Rooms, real-time play over WebSockets (Socket.IO)
   web/      The phone app (React + Vite)
 scripts/
@@ -76,7 +76,7 @@ game with 4 phone browsers — including a deliberate mistake caught with CRAZY!
 - **The server is the referee.** It holds the deck and every hand; each phone only receives its
   own cards plus everyone's card counts.
 - **Mistakes are allowed.** Any move goes on the table. The server knows if it was illegal but only
-  punishes it if someone hits CRAZY! within 4 seconds (or before the next move). Playing out of turn
+  punishes it if someone hits CRAZY! before the next move (a winning last card gets 5 seconds). Playing out of turn
   and dodging a 2 / A♠ are caught automatically.
 - **Refresh-proof.** Your seat is saved on your phone; reload or lose signal and you drop straight
   back into the game. If you're gone on your turn for 15 seconds, the game draws and passes for you.
