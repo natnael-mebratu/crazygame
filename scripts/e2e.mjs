@@ -177,6 +177,30 @@ if (final.status === 'finished') {
   await host.getByRole('button', { name: 'Play again' }).click();
   await pages[1].page.locator('.sheet.win').waitFor({ state: 'detached', timeout: 5000 });
   log('rematch dealt:', (await view(pages[1].page)).status);
+  await sleep(400);
+  const staleRematch = await pages[1].page.locator('.feed-line').count();
+  if (staleRematch) errors.push(`rematch shows ${staleRematch} old feed lines`);
+
+  // Leave, start a brand-new room: nothing from the old game may show up.
+  await host.getByRole('button', { name: 'Leave' }).click();
+  host.once('dialog', (d) => d.accept());
+  await host.getByRole('button', { name: 'Create a game' }).click({ timeout: 5000 }).catch(async () => {
+    await host.getByRole('button', { name: 'Leave' }).click();
+    await host.getByRole('button', { name: 'Create a game' }).click();
+  });
+  await host.locator('.code-tiles').waitFor();
+  const code2 = (await host.locator('.code-tiles').innerText()).replace(/\s/g, '');
+  const p2 = pages[1].page;
+  await p2.evaluate(() => localStorage.removeItem('crazy.session'));
+  await p2.goto(`${BASE}/?room=${code2}`);
+  await p2.getByRole('button', { name: `Join room ${code2}` }).click();
+  await host.getByRole('button', { name: /Deal cards/ }).click();
+  await host.locator('.hand-card').first().waitFor();
+  await sleep(500);
+  const staleNew = await host.locator('.feed-line').count();
+  if (staleNew) errors.push(`new room shows ${staleNew} old feed lines`);
+  log('new room clean:', !staleRematch && !staleNew);
+  await host.screenshot({ path: `${SHOTS}/07-new-room.png` });
 }
 
 console.log(errors.length ? `PAGE ERRORS:\n${errors.join('\n')}` : 'no page errors');

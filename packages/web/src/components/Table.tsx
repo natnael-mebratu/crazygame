@@ -66,9 +66,23 @@ export function Table({ room, view, batch, onLeave }: Props) {
     prevTurn.current = view.turnPlayerId;
   }, [view.turnPlayerId, me]);
 
-  // Turn server events into feed lines, stamps and flying cards.
+  // A new game (rematch) starts with an empty table: clear the old feed.
+  const prevDiscard = useRef(view.discardCount);
   useEffect(() => {
-    if (!batch.events.length) return;
+    if (view.discardCount === 0 && prevDiscard.current > 0) {
+      setFeed([]);
+      setLastPlayer(null);
+      setSel([]);
+    }
+    prevDiscard.current = view.discardCount;
+  }, [view.discardCount]);
+
+  // Turn server events into feed lines, stamps and flying cards.
+  // Only events that arrive while this table is open — never ones from an earlier game.
+  const seenSeq = useRef(batch.seq);
+  useEffect(() => {
+    if (batch.seq === seenSeq.current || !batch.events.length) return;
+    seenSeq.current = batch.seq;
     const lines: { id: number; text: string; tone: Tone }[] = [];
     const fl: Flight[] = [];
     let stamp: typeof flash = null;
