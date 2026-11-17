@@ -97,7 +97,7 @@ describe('Crazy window (default: until the next move)', () => {
     const g = live([['QC', ...PLAIN], PLAIN], 'AS');
     play(g, 'p0', ['QC'], undefined, 0);
     g.tick(60_000);
-    expect(g.viewFor('p1').crazyWindow).toEqual({ moveId: 1, playerId: 'p0', closesAt: null });
+    expect(g.viewFor('p1').crazyWindow).toEqual({ moveId: 1, playerId: 'p0', kind: 'play', closesAt: null });
     g.callCrazy('p1', 60_000);
     expect(top(g)).toBe('AS');
     expect(hand(g, 'p0')).toContain('QC');
@@ -424,7 +424,55 @@ describe('viewFor', () => {
     const v = g.viewFor('p1');
     expect(v.you.hand.length).toBe(PLAIN.length);
     expect(v.players[0]).toEqual({ id: 'p0', name: 'P0', cardCount: PLAIN.length, snap: null });
-    expect(v.crazyWindow).toEqual({ moveId: 1, playerId: 'p0', closesAt: WINDOW });
+    expect(v.crazyWindow).toEqual({ moveId: 1, playerId: 'p0', kind: 'play', closesAt: WINDOW });
     expect(JSON.stringify(v)).not.toContain('wrong_match');
   });
 });
+
+describe('table info', () => {
+  it('remembers who called the suit; a normal card clears it', () => {
+    const g = setup({ hands: [['JD', ...PLAIN], ['3S', ...PLAIN]], top: '9H' });
+    play(g, 'p0', ['JD'], 'S');
+    expect(g.viewFor('p1').suitCalledBy).toBe('p0');
+    play(g, 'p1', ['3S']);
+    expect(g.viewFor('p1').suitCalledBy).toBeNull();
+  });
+
+  it('keeps the last plays, and drops a caught one', () => {
+    const g = setup({ hands: [['9H', 'KS', ...PLAIN], ['9D', ...PLAIN]], top: '4H' });
+    play(g, 'p0', ['9H'], undefined, 0);
+    play(g, 'p1', ['9D'], undefined, 10);
+    expect(g.viewFor('p0').recent.map((r) => r.playerId)).toEqual(['p0', 'p1']);
+    play(g, 'p0', ['KS'], undefined, 20); // wrong suit
+    expect(g.viewFor('p0').crazyWindow?.kind).toBe('play');
+    g.callCrazy('p1', 30);
+    expect(g.viewFor('p0').recent.length).toBe(2);
+  });
+});
+
+describe('removing a player', () => {
+  it('on their turn: cards go to the draw pile, the next player continues', () => {
+    const g = setup({ hands: [PLAIN, ['KS', 'QS'], PLAIN], top: '4H', turn: 1, pending: 2 });
+    const pile = g.state.drawPile.length;
+    const ev = g.removePlayer('p1');
+    expect(ev[0]).toEqual({ type: 'removed', playerId: 'p1', name: 'P1' });
+    expect(g.state.players.map((p) => p.id)).toEqual(['p0', 'p2']);
+    expect(g.state.drawPile.length).toBe(pile + 2);
+    expect(turnOf(g)).toBe('p2');
+    expect(g.state.pendingPenalty).toBe(0);
+  });
+
+  it('before the current player keeps the same player on turn', () => {
+    const g = setup({ hands: [PLAIN, PLAIN, PLAIN], top: '4H', turn: 2 });
+    g.removePlayer('p0');
+    expect(turnOf(g)).toBe('p2');
+  });
+
+  it('down to one player: they win', () => {
+    const g = setup({ hands: [PLAIN, PLAIN], top: '4H' });
+    g.removePlayer('p1');
+    expect(g.state.status).toBe('finished');
+    expect(g.state.winner).toBe('p0');
+  });
+});
+

@@ -16,6 +16,7 @@ export function App() {
   const [batch, setBatch] = useState<EventBatch>({ seq: 0, events: [] });
   const [online, setOnline] = useState(socket.connected);
   const [resuming, setResuming] = useState(() => !!loadSession());
+  const [notice, setNotice] = useState('');
 
   useEffect(() => {
     const onConnect = async () => {
@@ -42,13 +43,22 @@ export function App() {
       if (events.length) setBatch((b) => ({ seq: b.seq + 1, events }));
     };
 
+    const onRemoved = () => {
+      clearSession();
+      setRoom(null);
+      setView(null);
+      setNotice('The host removed you from the room.');
+    };
+
     socket.on('connect', onConnect);
+    socket.on('room:removed', onRemoved);
     socket.on('disconnect', onDisconnect);
     socket.on('room:state', onRoom);
     socket.on('game:update', onUpdate);
     if (socket.connected) onConnect();
     return () => {
       socket.off('connect', onConnect);
+      socket.off('room:removed', onRemoved);
       socket.off('disconnect', onDisconnect);
       socket.off('room:state', onRoom);
       socket.off('game:update', onUpdate);
@@ -63,7 +73,7 @@ export function App() {
   };
 
   let screen;
-  if (!room) screen = resuming ? <div className="splash">CRAZY</div> : <Home />;
+  if (!room) screen = resuming ? <div className="splash">CRAZY</div> : <Home notice={notice} />;
   else if (room.status === 'lobby' || !view) screen = <Lobby room={room} onLeave={leave} />;
   else screen = <Table room={room} view={view} batch={batch} onLeave={leave} />;
 

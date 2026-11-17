@@ -23,7 +23,7 @@ const play=async(p,labels,suit)=>{const ids=[];for(const l of labels) ids.push(a
 await shot(A,'01-start',300);
 const st=(await v(A)).turnPlayerId; const pages={[ (await v(A)).you.id]:A, [(await v(Bp)).you.id]:Bp, [(await v(C)).you.id]:C};
 const nonStarter=[A,Bp,C].find(p=>pages[st]!==p);
-await nonStarter.getByRole('button',{name:'SNAP'}).click(); await shot(nonStarter,'02-prestart-snap',300);
+await nonStarter.getByRole('button',{name:'LAST!'}).click(); await shot(nonStarter,'02-prestart-snap',300);
 
 const base={hands:[['KH','9S','4D','5C','JD'],['3C','8H','QS','2D','2S'],['6D','7C','10H','JS','AS']],top:'4S',turn:0};
 await rig(base); await A.waitForTimeout(1800);
@@ -41,13 +41,13 @@ await play(C,['6D']); await shot(C,'06-C-out-of-turn',250); await shot(A,'06b-A-
 await A.waitForTimeout(1500);
 await rig({hands:[['9S','KH'],base.hands[1],base.hands[2]],top:'4S',turn:0}); await A.waitForTimeout(400);
 await play(A,['9S']); await shot(Bp,'07-B-sees-last-card',300);
-await Bp.getByRole('button',{name:'SNAP'}).click(); await shot(A,'08-A-snapped',250);
+await Bp.getByRole('button',{name:'LAST!'}).click(); await shot(A,'08-A-snapped',250);
 
 await A.waitForTimeout(1500);
 await rig({hands:[['9S','KH'],base.hands[1],base.hands[2]],top:'4S',turn:0}); await A.waitForTimeout(400);
-await play(A,['9S']); await A.waitForTimeout(200); await A.getByRole('button',{name:'SNAP'}).click(); await shot(A,'09-A-safe',250);
+await play(A,['9S']); await A.waitForTimeout(200); await A.getByRole('button',{name:'LAST!'}).click(); await shot(A,'09-A-safe',250);
 await A.waitForTimeout(1500);
-await C.getByRole('button',{name:'SNAP'}).click(); await shot(C,'10-C-false-snap',250);
+await C.getByRole('button',{name:'LAST!'}).click(); await shot(C,'10-C-false-snap',250);
 
 await A.waitForTimeout(1500);
 await rig(base); await A.waitForTimeout(400);
@@ -60,7 +60,7 @@ await play(Bp,['QS']); await shot(Bp,'13-B-dodge',300);
 
 await Bp.waitForTimeout(1500);
 await rig({hands:[['9S'],base.hands[1],base.hands[2]],top:'4S',turn:0}); await A.waitForTimeout(400);
-await A.getByRole('button',{name:'SNAP'}).click(); await A.waitForTimeout(300);
+await A.getByRole('button',{name:'LAST!'}).click(); await A.waitForTimeout(300);
 await play(A,['9S']); await shot(Bp,'14-B-last-card-window',600);
 await shot(Bp,'15-win',5200);
 for (const [n,p] of [['A',A],['B',Bp],['C',C]]) console.log(n,'flying cards left at end:', await p.locator('.fly').count());

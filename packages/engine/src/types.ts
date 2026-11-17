@@ -44,6 +44,7 @@ export interface MoveUndo {
   pendingPenalty: number;
   wildCooldown: boolean;
   hasDrawn: boolean;
+  suitCalledBy: string | null;
 }
 
 export interface LastMove {
@@ -57,6 +58,12 @@ export interface LastMove {
   undo: MoveUndo;
   /** The player emptied their hand; they win when the Crazy window closes. */
   winnerPending: boolean;
+}
+
+export interface RecentPlay {
+  playerId: string;
+  cards: Card[];
+  chosenSuit?: Suit;
 }
 
 export interface GameConfig {
@@ -85,6 +92,10 @@ export interface GameState {
   /** The move that can currently be called Crazy on, if its window is open. */
   lastMove: LastMove | null;
   moveSeq: number;
+  /** Who called the current suit with an 8 / J (null if it wasn't called). */
+  suitCalledBy: string | null;
+  /** The last few plays, oldest first. */
+  recent: RecentPlay[];
   /** Players currently on 1 card and whether they've snapped. */
   snap: Record<string, SnapStatus>;
   status: 'playing' | 'finished';
@@ -99,7 +110,8 @@ export type GameEvent =
   | { type: 'snap'; byId: string; targetId: string; outcome: 'safe' | 'caught' | 'false' | 'late' }
   | { type: 'reshuffled' }
   | { type: 'turn'; playerId: string }
-  | { type: 'won'; playerId: string };
+  | { type: 'won'; playerId: string }
+  | { type: 'removed'; playerId: string; name: string };
 
 /** What one player is allowed to see. */
 export interface PlayerView {
@@ -115,7 +127,9 @@ export interface PlayerView {
   wildCooldown: boolean;
   hasDrawn: boolean;
   /** closesAt null = open until the next move. */
-  crazyWindow: { moveId: number; playerId: string; closesAt: number | null } | null;
+  crazyWindow: { moveId: number; playerId: string; kind: 'play' | 'pass'; closesAt: number | null } | null;
+  suitCalledBy: string | null;
+  recent: RecentPlay[];
   status: 'playing' | 'finished';
   winner: string | null;
 }

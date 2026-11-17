@@ -32,10 +32,23 @@ export interface SeatProps {
   justPlayed: boolean;
   /** Many players: avatar + name + count badge, no fan. */
   compact?: boolean;
+  /** Host only, for players who left: take them out of the game. */
+  onRemove?: () => void;
   style: CSSProperties;
 }
 
-export function Seat({ id, name, count, snap, active, away, justPlayed, compact, style }: SeatProps) {
+export function Seat({ id, name, count, snap, active, away, justPlayed, compact, onRemove, style }: SeatProps) {
+  const removeBtn = onRemove && (
+    <button
+      className="seat-remove"
+      onClick={(e) => {
+        e.stopPropagation();
+        onRemove();
+      }}
+    >
+      Remove
+    </button>
+  );
   if (compact) {
     const last = count === 1;
     return (
@@ -49,6 +62,7 @@ export function Seat({ id, name, count, snap, active, away, justPlayed, compact,
           <span className={`badge${last ? (snap === 'safe' ? ' safe' : ' last') : ''}`}>{count}</span>
         </div>
         <span className="seat-name">{away ? `${name} · away` : name}</span>
+        {removeBtn}
         {justPlayed && <span className="seat-ping" />}
       </div>
     );
@@ -78,6 +92,7 @@ export function Seat({ id, name, count, snap, active, away, justPlayed, compact,
           />
         ))}
       </div>
+      {removeBtn}
       {justPlayed && <span className="seat-ping" />}
     </div>
   );

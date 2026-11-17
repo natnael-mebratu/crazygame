@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { loadName, saveName, saveSession, send } from '../net';
 
-export function Home() {
+export function Home({ notice = '' }: { notice?: string }) {
   const params = new URLSearchParams(location.search);
   const invited = (params.get('room') ?? '').toUpperCase().slice(0, 4);
   const [name, setName] = useState(loadName());
@@ -44,6 +44,7 @@ export function Home() {
         <p className="tagline">The Ethiopian card game. Play with friends.</p>
       </div>
 
+      {notice && <p className="notice">{notice}</p>}
       <div className="panel">
         <label className="field">
           <span>Your name</span>

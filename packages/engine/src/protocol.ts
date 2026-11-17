@@ -20,7 +20,7 @@ export interface RoomState {
 /** The engine's view, with the Crazy window as time remaining (no clock skew). */
 export interface ClientView extends Omit<PlayerView, 'crazyWindow'> {
   /** remainingMs null = open until the next move (only a winning card has a timer). */
-  crazyWindow: { moveId: number; playerId: string; remainingMs: number | null; totalMs: number | null } | null;
+  crazyWindow: { moveId: number; playerId: string; kind: 'play' | 'pass'; remainingMs: number | null; totalMs: number | null } | null;
 }
 
 export interface Session {
@@ -39,6 +39,8 @@ export interface ClientToServerEvents {
   'room:leave': (ack: Ack) => void;
   /** Host only. Starts the first game, or a rematch. */
   'room:start': (ack: Ack) => void;
+  /** Host only. Lobby: anyone. During a game: only players who are away. */
+  'room:remove': (a: { playerId: string }, ack: Ack) => void;
   'game:play': (a: { cardIds: string[]; suit?: Suit }, ack: Ack) => void;
   'game:draw': (ack: Ack) => void;
   'game:pass': (ack: Ack) => void;
@@ -49,4 +51,6 @@ export interface ClientToServerEvents {
 export interface ServerToClientEvents {
   'room:state': (s: RoomState) => void;
   'game:update': (u: { view: ClientView | null; events: GameEvent[] }) => void;
+  /** You were removed from the room by the host. */
+  'room:removed': () => void;
 }

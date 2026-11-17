@@ -12,12 +12,14 @@ export const spoken = (c: Card) => {
 
 const RANK_ORDER = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
 const SUIT_ORDER: Suit[] = ['S', 'H', 'C', 'D'];
-/** Group by suit (alternating colors), then rank. */
-export const sortHand = (cards: Card[]) =>
-  [...cards].sort(
-    (a, b) =>
-      SUIT_ORDER.indexOf(a.suit) - SUIT_ORDER.indexOf(b.suit) || RANK_ORDER.indexOf(a.rank) - RANK_ORDER.indexOf(b.rank),
-  );
+export type SortMode = 'suit' | 'number';
+/** By suit (alternating colors) then number, or by number then suit. */
+export const sortHand = (cards: Card[], mode: SortMode = 'suit') =>
+  [...cards].sort((a, b) => {
+    const bySuit = SUIT_ORDER.indexOf(a.suit) - SUIT_ORDER.indexOf(b.suit);
+    const byRank = RANK_ORDER.indexOf(a.rank) - RANK_ORDER.indexOf(b.rank);
+    return mode === 'suit' ? bySuit || byRank : byRank || bySuit;
+  });
 
 export function CardFace({ card, style, className = '' }: { card: Card; style?: CSSProperties; className?: string }) {
   const face = card.rank === 'J' || card.rank === 'Q' || card.rank === 'K';

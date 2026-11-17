@@ -67,6 +67,18 @@ export function Lobby({ room, onLeave }: { room: RoomState; onLeave: () => void 
               </span>
               {p.isHost && <span className="chip">Host</span>}
               {!p.connected && <span className="chip dim">Away</span>}
+              {isHost && p.id !== room.youId && (
+                <button
+                  className="mini-btn"
+                  onClick={async () => {
+                    if (!confirm(`Remove ${p.name} from the room?`)) return;
+                    const r = await send('room:remove', { playerId: p.id });
+                    if (!r.ok) setError(r.error);
+                  }}
+                >
+                  Remove
+                </button>
+              )}
             </li>
           ))}
         </ul>
@@ -92,7 +104,7 @@ export function Lobby({ room, onLeave }: { room: RoomState; onLeave: () => void 
           <li><b>8 / J</b> change the suit — not twice in a row.</li>
           <li>Can't play? Draw 1, then play or pass.</li>
           <li>Catch a mistake → hit <b>CRAZY!</b> (+4 to them). Wrong call → +4 to you.</li>
-          <li>One card left? Hit <b>SNAP</b> before anyone else does.</li>
+          <li>One card left? Hit <b>LAST!</b> before anyone else does — if they beat you, +4.</li>
         </ul>
       </details>
     </main>

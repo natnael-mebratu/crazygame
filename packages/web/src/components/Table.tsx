@@ -3,6 +3,11 @@ import { isWild, type AckResult, type Card, type ClientView, type RoomState, typ
 import type { EventBatch } from '../App';
 import { buzz, send } from '../net';
 import { describe, type Tone } from '../describe';
+import { CardBack, SUIT_NAME, SYM, isRed, label, sortHand, tilt, type SortMode } from './Cards';
+import { DiscardPile } from './DiscardPile';
+import { FlyLayer, type Flight } from './FlyLayer';
+import { Hand } from './Hand';
+import { Avatar, Seat } from './Seat';
 
 interface Stamp {
   id: number;
@@ -10,12 +15,16 @@ interface Stamp {
   sub: string;
   tone: Tone;
 }
-import { CardBack, SUIT_NAME, SYM, isRed, label, sortHand, tilt } from './Cards';
-import { DiscardPile } from './DiscardPile';
-import { FlyLayer, type Flight } from './FlyLayer';
-import { Hand } from './Hand';
-import { Avatar, Seat } from './Seat';
-import { SuitPicker } from './SuitPicker';
+
+const SUITS: Suit[] = ['S', 'H', 'C', 'D'];
+
+function loadSort(): SortMode {
+  try {
+    return localStorage.getItem('crazy.sort') === 'number' ? 'number' : 'suit';
+  } catch {
+    return 'suit';
+  }
+}
 
 interface Props {
   room: RoomState;
@@ -43,7 +52,20 @@ export function Table({ room, view, batch, onLeave }: Props) {
 
   // Cards you just dropped leave your hand at once, before the server answers.
   const [hidden, setHidden] = useState<Set<string>>(new Set());
-  const hand = useMemo(() => sortHand(view.you.hand).filter((c) => !hidden.has(c.id)), [view.you.hand, hidden]);
+  const [sortMode, setSortMode] = useState<SortMode>(loadSort);
+  const hand = useMemo(
+    () => sortHand(view.you.hand, sortMode).filter((c) => !hidden.has(c.id)),
+    [view.you.hand, hidden, sortMode],
+  );
+  const toggleSort = () => {
+    const next: SortMode = sortMode === 'suit' ? 'number' : 'suit';
+    setSortMode(next);
+    try {
+      localStorage.setItem('crazy.sort', next);
+    } catch {
+      /* ignore */
+    }
+  };
   const byId = (id: string) => hand.find((c) => c.id === id);
   const myTurn = view.turnPlayerId === me && view.status === 'playing';
   const pending = view.pendingPenalty;
@@ -60,6 +82,10 @@ export function Table({ room, view, batch, onLeave }: Props) {
   const [flights, setFlights] = useState<Flight[]>([]);
   const [error, setError] = useState<{ id: number; text: string } | null>(null);
   const [lastPlayer, setLastPlayer] = useState<string | null>(null);
+  const [showRecent, setShowRecent] = useState(false);
+  /** Cards that just arrived in your hand glow for a moment. */
+  const [fresh, setFresh] = useState<Set<string>>(new Set());
+  const prevHand = useRef<Set<string> | null>(null);
   const cardEls = useRef(new Map<string, HTMLElement>());
   /** Card ids already flown to the pile locally (no second flight when the server confirms). */
   const flown = useRef(new Set<string>());
@@ -74,6 +100,20 @@ export function Table({ room, view, batch, onLeave }: Props) {
       const keep = s.filter((id) => view.you.hand.some((c) => c.id === id));
       return keep.length === s.length ? s : keep;
     });
+  }, [view.you.hand]);
+
+  // Mark newly drawn cards (not the opening deal).
+  useEffect(() => {
+    const ids = new Set(view.you.hand.map((c) => c.id));
+    const before = prevHand.current;
+    prevHand.current = ids;
+    if (!before || view.discardCount === 0) return;
+    const added = [...ids].filter((id) => !before.has(id));
+    if (!added.length) return;
+    setFresh(new Set(added));
+    const t = setTimeout(() => setFresh(new Set()), 2600);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view.you.hand]);
 
   // Buzz when it becomes your turn.
@@ -248,11 +288,14 @@ export function Table({ room, view, batch, onLeave }: Props) {
   const drop = (ids: string[]) => {
     const lead = byId(ids[0]);
     if (!lead) return;
-    if (ids.length === 1 && isWild(lead) && view.discardCount > 0) setPicker(ids);
-    else playIds(ids);
+    if (ids.length === 1 && isWild(lead) && view.discardCount > 0) {
+      setSel(ids);
+      setPicker(ids);
+    } else playIds(ids);
   };
 
   const tap = (c: Card) => {
+    setPicker(null);
     if (sel.includes(c.id)) {
       if (c.id === sel[0]) drop(sel);
       else setSel(sel.filter((x) => x !== c.id));
@@ -262,7 +305,27 @@ export function Table({ room, view, batch, onLeave }: Props) {
     setSel(lead?.rank === '7' ? [...sel, c.id] : [c.id]);
   };
 
-  // SNAP goes to whoever is racing on their last card — you first.
+  /** Flick a card up: drop it — or the whole combo if it's part of one. */
+  const swipe = (c: Card) => {
+    setPicker(null);
+    if (sel.length > 1 && sel.includes(c.id)) drop(sel);
+    else drop([c.id]);
+  };
+
+  /** Tap anywhere off your cards: put lifted cards back down. */
+  const clearSel = () => {
+    if (sel.length || picker) {
+      setSel([]);
+      setPicker(null);
+    }
+  };
+
+  const removePlayer = async (id: string) => {
+    if (!confirm(`Remove ${nameOf(id)} from the game? Their cards go back into the deck.`)) return;
+    await act(send('room:remove', { playerId: id }));
+  };
+
+  // LAST! goes to whoever is racing on their last card — you first.
   const meView = players.find((p) => p.id === me);
   const iAmOpen = hand.length === 1 && meView?.snap === 'open';
   const openOther = players.find((p) => p.id !== me && p.snap === 'open');
@@ -271,6 +334,18 @@ export function Table({ room, view, batch, onLeave }: Props) {
 
   const win = view.crazyWindow;
   const canCall = !!win && win.playerId !== me;
+  // What CRAZY! would be calling on.
+  let callTarget = '';
+  if (canCall && win) {
+    const who = nameOf(win.playerId).split(' ')[0];
+    const lastPlay = view.recent[view.recent.length - 1];
+    if (win.kind === 'pass') callTarget = `${who}'s pass`;
+    else if (lastPlay && lastPlay.playerId === win.playerId)
+      callTarget = lastPlay.cards.length > 1 ? `${who}'s combo` : `${who} · ${label(lastPlay.cards[0])}`;
+    else callTarget = who;
+  }
+  const isHost = room.hostId === me;
+  const suitCounts = Object.fromEntries(SUITS.map((st) => [st, hand.filter((c) => c.suit === st).length])) as Record<Suit, number>;
   const turnName = nameOf(view.turnPlayerId);
 
   let status: string;
@@ -320,7 +395,7 @@ export function Table({ room, view, batch, onLeave }: Props) {
         </button>
       </header>
 
-      <section className="table-area">
+      <section className="table-area" onClick={clearSel}>
         <div className="felt">
           <div className="felt-line" />
         </div>
@@ -336,6 +411,7 @@ export function Table({ room, view, batch, onLeave }: Props) {
               active={view.turnPlayerId === p.id}
               away={isAway(p.id)}
               compact={compact}
+              onRemove={isHost && isAway(p.id) && view.status === 'playing' ? () => removePlayer(p.id) : undefined}
               justPlayed={lastPlayer === p.id && !!win && win.playerId === p.id}
               style={{ left: `${seatPos[i].x}%`, top: seatPos[i].y }}
             />
@@ -357,16 +433,29 @@ export function Table({ room, view, batch, onLeave }: Props) {
               </button>
               <span className="pile-label">{view.drawCount} left</span>
             </div>
-            <div className="pile-col">
+            <button
+              className="pile-col pile-btn"
+              aria-label="Show the last cards played"
+              disabled={!view.recent.length}
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowRecent((v) => !v);
+              }}
+            >
               <DiscardPile top={view.top} window={win} instant={flown} />
-              <span className="pile-label">{view.discardCount ? `${view.discardCount} played` : 'Start here'}</span>
-            </div>
+              <span className="pile-label">
+                {view.discardCount ? `${view.discardCount} played · tap` : 'Start here'}
+              </span>
+            </button>
           </div>
 
           <div className="chips">
             {view.activeSuit && (
               <span className={`chip suit${isRed(view.activeSuit) ? ' red' : ''}`}>
                 <b>{SYM[view.activeSuit]}</b> {SUIT_NAME[view.activeSuit]}
+                {view.suitCalledBy && (
+                  <em className="called-by">· called by {view.suitCalledBy === me ? 'you' : nameOf(view.suitCalledBy).split(' ')[0]}</em>
+                )}
               </span>
             )}
             <span className="chip outline">
@@ -379,6 +468,25 @@ export function Table({ room, view, batch, onLeave }: Props) {
             {pending > 0 && <span className="chip danger">+{pending} pending</span>}
           </div>
 
+          {showRecent && (
+            <div className="recent" role="dialog" aria-label="Last cards played" onClick={() => setShowRecent(false)}>
+              <div className="recent-title">Last plays</div>
+              {[...view.recent].reverse().map((r, i) => (
+                <div key={i} className="recent-row">
+                  <span className="recent-name">{nameOf(r.playerId).split(' ')[0]}</span>
+                  <span className="recent-cards">
+                    {r.cards.map((c) => (
+                      <span key={c.id} className={`mini-chip${isRed(c.suit) ? ' red' : ''}`}>
+                        {label(c)}
+                      </span>
+                    ))}
+                  </span>
+                  {r.chosenSuit && <span className={`recent-call${isRed(r.chosenSuit) ? ' red' : ''}`}>→ {SYM[r.chosenSuit]}</span>}
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="feed" aria-live="polite">
             {feed.slice(0, 2).map((l, i) => (
               <div key={l.id} className={`feed-line ${l.tone}${i === 0 ? ' latest' : ''}`}>
@@ -389,39 +497,69 @@ export function Table({ room, view, batch, onLeave }: Props) {
         </div>
       </section>
 
-      <section className="me-row">
+      <section className="me-row" onClick={clearSel}>
         <div className="me-status">
           <Avatar id={me} name={meView?.name ?? 'Y'} size={30} ring={myTurn ? 'var(--gold)' : undefined} />
           <span className={myTurn ? 'turn-text mine' : 'turn-text'}>{status}</span>
         </div>
-        <span className="muted small">
-          {hand.length} card{hand.length === 1 ? '' : 's'}
-        </span>
+        <div className="me-right">
+          <button className="mini-btn sort-btn" onClick={toggleSort} aria-label={`Sorted by ${sortMode}. Change sorting`}>
+            {sortMode === 'suit' ? '♠♥ by suit' : '1–K by number'}
+          </button>
+          <span className="muted small">
+            {hand.length} card{hand.length === 1 ? '' : 's'}
+          </span>
+        </div>
       </section>
 
       <section className="actions">
         <button className="btn outline act" disabled={!myTurn || busy || (view.hasDrawn && !pending)} onClick={draw}>
           {pending && myTurn ? `Take +${pending}` : 'Draw'}
         </button>
-        <button className="btn outline act" disabled={!myTurn || busy} onClick={pass}>
+        <button
+          className={`btn outline act${myTurn && view.hasDrawn && !pending ? ' nudge' : ''}`}
+          disabled={!myTurn || busy}
+          onClick={pass}
+        >
           Pass
         </button>
-        <button className="btn crazy act" disabled={!canCall} onClick={() => act(send('game:crazy'))}>
-          CRAZY!
+        <button className="btn crazy act two-line" disabled={!canCall} onClick={() => act(send('game:crazy'))}>
+          <span>CRAZY!</span>
+          {callTarget && <small>on {callTarget}</small>}
         </button>
         <button
           className={`btn snap act${snapHot ? ' hot' : ''}`}
           onClick={() => act(send('game:snap', { targetId: snapTarget }))}
         >
-          SNAP
+          LAST!
         </button>
       </section>
 
       <div className="sel-bar">
-        {selCards.length > 0 ? (
+        {picker ? (
+          <div className="suit-bar" role="group" aria-label="Call a suit">
+            <span className="suit-bar-label">Call:</span>
+            {SUITS.map((st) => (
+              <button
+                key={st}
+                className={`suit-chip${isRed(st) ? ' red' : ''}${view.activeSuit === st ? ' current' : ''}`}
+                onClick={() => playIds(picker, st)}
+                aria-label={`${SUIT_NAME[st]}, you hold ${suitCounts[st]}`}
+              >
+                <b>{SYM[st]}</b>
+                <span>{suitCounts[st]}</span>
+              </button>
+            ))}
+            <button className="mini-btn" aria-label="Cancel" onClick={() => { setPicker(null); setSel([]); }}>
+              ✕
+            </button>
+          </div>
+        ) : selCards.length > 0 ? (
           <>
-            <span>
-              {selCards.length > 1 ? `Combo: ${selCards.map(label).join(' ')}` : `Tap ${label(selCards[0])} again to drop`}
+            <span className="sel-text">
+              {selCards.length > 1
+                ? `Combo ${label(selCards[0])} +${selCards.length - 1} · ${label(selCards[selCards.length - 1])} on top`
+                : `Tap again or swipe up to drop ${label(selCards[0])}`}
             </span>
             {selCards[0].rank === '7' && sameSuitRest.length > 0 && (
               <button className="mini-btn" onClick={() => setSel([...sel, ...sameSuitRest.map((c) => c.id)])}>
@@ -436,11 +574,21 @@ export function Table({ room, view, batch, onLeave }: Props) {
             </button>
           </>
         ) : (
-          <span className="muted">{myTurn ? 'Tap a card to pick it' : ' '}</span>
+          <span className="muted">{myTurn ? 'Tap a card to pick it — or swipe it up' : ' '}</span>
         )}
       </div>
 
-      <Hand cards={hand} selected={sel} onTap={tap} refs={cardEls} meId={me} dim={view.status !== 'playing'} waiting={!myTurn} />
+      <Hand
+        cards={hand}
+        selected={sel}
+        onTap={tap}
+        onSwipe={swipe}
+        refs={cardEls}
+        meId={me}
+        dim={view.status !== 'playing'}
+        waiting={!myTurn}
+        fresh={fresh}
+      />
 
       <FlyLayer flights={flights} onDone={(id) => setFlights((f) => f.filter((x) => x.id !== id || x.hold))} />
 
@@ -457,9 +605,6 @@ export function Table({ room, view, batch, onLeave }: Props) {
         </div>
       )}
 
-      {picker && (
-        <SuitPicker current={view.activeSuit} onPick={(s) => playIds(picker, s)} onCancel={() => setPicker(null)} />
-      )}
 
       {view.status === 'finished' && view.winner && (
         <WinOverlay winner={nameOf(view.winner)} isMe={view.winner === me} isHost={room.hostId === me} onLeave={onLeave} />

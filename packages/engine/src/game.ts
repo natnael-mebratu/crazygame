@@ -75,6 +75,8 @@ export class CrazyGame {
       hasDrawn: false,
       lastMove: null,
       moveSeq: 0,
+      suitCalledBy: null,
+      recent: [],
       snap: {},
       status: 'playing',
       winner: null,
@@ -136,6 +138,9 @@ export class CrazyGame {
       ...(liveWild ? { chosenSuit: chosenSuit ?? cards[0].suit } : {}),
     });
     this.applyEffects(cards, chosenSuit, opening);
+    if (!liveWild) s.suitCalledBy = null;
+    else if (s.wildCooldown) s.suitCalledBy = playerId; // a dead wild keeps the caller
+    s.recent = [...s.recent, { playerId, cards, ...(liveWild ? { chosenSuit: s.activeSuit! } : {}) }].slice(-6);
 
     s.lastMove = {
       id: ++s.moveSeq,
@@ -231,6 +236,7 @@ export class CrazyGame {
 
     const offender = this.player(m.playerId);
     const ids = new Set(m.cards.map((c) => c.id));
+    if (m.kind === 'play') s.recent = s.recent.slice(0, -1);
     s.discard = s.discard.filter((c) => !ids.has(c.id));
     offender.hand.push(...m.cards);
     Object.assign(s, m.undo);
@@ -279,6 +285,42 @@ export class CrazyGame {
     return ev;
   }
 
+  /**
+   * Take a player out of a running game (the host removing someone who left).
+   * Their cards go to the bottom of the draw pile; play continues with the next player.
+   */
+  removePlayer(playerId: string): GameEvent[] {
+    this.ensurePlaying();
+    const s = this.state;
+    const idx = this.indexOf(playerId);
+    if (idx < 0) throw new GameError('No such player');
+    const [p] = s.players.splice(idx, 1);
+    s.drawPile.unshift(...shuffle(p.hand, this.rng));
+    delete s.snap[p.id];
+    if (s.lastMove?.playerId === p.id) s.lastMove = null;
+    if (s.suitCalledBy === p.id) s.suitCalledBy = null;
+    const ev: GameEvent[] = [{ type: 'removed', playerId: p.id, name: p.name }];
+
+    const n = s.players.length;
+    if (idx === s.turn) {
+      // It was their turn: hand it to whoever comes next; any penalty on them is dropped.
+      s.turn = s.direction === 1 ? idx % n : (idx - 1 + n) % n;
+      s.pendingPenalty = 0;
+      s.hasDrawn = false;
+    } else if (idx < s.turn) {
+      s.turn -= 1;
+    }
+    if (n === 1) {
+      s.status = 'finished';
+      s.winner = s.players[0].id;
+      s.lastMove = null;
+      ev.push({ type: 'won', playerId: s.winner });
+    } else {
+      ev.push({ type: 'turn', playerId: this.current.id });
+    }
+    return ev;
+  }
+
   /** Call from a server timer so the Crazy window (and a pending win) closes on time. */
   tick(now = Date.now(), ev: GameEvent[] = []): GameEvent[] {
     const closesAt = this.windowClosesAt();
@@ -318,7 +360,9 @@ export class CrazyGame {
       pendingPenalty: s.pendingPenalty,
       wildCooldown: s.wildCooldown,
       hasDrawn: s.hasDrawn,
-      crazyWindow: m ? { moveId: m.id, playerId: m.playerId, closesAt: this.windowClosesAt() } : null,
+      crazyWindow: m ? { moveId: m.id, playerId: m.playerId, kind: m.kind, closesAt: this.windowClosesAt() } : null,
+      suitCalledBy: s.suitCalledBy,
+      recent: s.recent.map((r) => ({ ...r, cards: [...r.cards] })),
       status: s.status,
       winner: s.winner,
     };
@@ -466,8 +510,8 @@ export class CrazyGame {
   }
 
   private snapshot(): MoveUndo {
-    const { activeSuit, direction, turn, pendingPenalty, wildCooldown, hasDrawn } = this.state;
-    return { activeSuit, direction, turn, pendingPenalty, wildCooldown, hasDrawn };
+    const { activeSuit, direction, turn, pendingPenalty, wildCooldown, hasDrawn, suitCalledBy } = this.state;
+    return { activeSuit, direction, turn, pendingPenalty, wildCooldown, hasDrawn, suitCalledBy };
   }
 
   private advance(steps: number) {

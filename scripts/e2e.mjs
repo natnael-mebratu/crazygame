@@ -106,7 +106,7 @@ while (moves < 400) {
   for (let i = 0; i < pages.length; i++) {
     const me = views[i].players.find((p) => p.id === views[i].you.id);
     if (views[i].you.hand.length === 1 && me.snap === 'open') {
-      await pages[i].page.getByRole('button', { name: 'SNAP' }).click();
+      await pages[i].page.getByRole('button', { name: 'LAST!' }).click();
       snaps++;
       log(`${pages[i].name} snaps`);
     }

@@ -61,7 +61,7 @@ Penalty for any foul: **+4 cards**, and the card(s) go back to your hand.
 - **Playing out of turn.** The card never reaches the table — the others only see
   that you took +4.
   Exception: before the starter has dropped the first card, **nothing** costs cards — not
-  playing early, not SNAP, not CRAZY!. You just get a message to wait.
+  playing early, not LAST!, not CRAZY!. You just get a message to wait.
 - **Dodging a 2 / A♠ penalty.** Card goes back, you take owed + 4, and it's still your turn.
 
 ### Caught by players
@@ -79,13 +79,13 @@ The app **doesn't stop you** from making these mistakes. If someone hits
 | Wrong call (move was legal) | The caller takes +4. |
 | Nobody calls | The move stands. You got away with it. |
 
-## 6. Last card — SNAP
+## 6. Last card — LAST!
 
-When someone is down to **1 card**, a **SNAP** button lights up on every phone.
+When someone is down to **1 card**, the **LAST!** button lights up on every phone.
 
-- **They hit SNAP first** → safe.
+- **They hit LAST! first** → safe.
 - **Anyone else hits it first** → they take **+4**.
-- Hitting SNAP on someone who doesn't have exactly 1 card → **you** take +4.
+- Hitting LAST! when someone who doesn't have exactly 1 card → **you** take +4.
 
 ## 7. Draw pile runs out
 

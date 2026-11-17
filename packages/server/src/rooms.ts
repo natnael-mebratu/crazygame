@@ -92,6 +92,27 @@ class Room {
     this.sync([]);
   }
 
+  /** Host removes a player: anyone in the lobby, only away players during a game. */
+  remove(byId: string, targetId: string) {
+    if (byId !== this.hostId) throw new GameError('Only the host can remove players');
+    if (byId === targetId) throw new GameError("You can't remove yourself — use Leave");
+    const m = this.members.find((x) => x.id === targetId);
+    if (!m) throw new GameError('That player already left');
+    const inGame = this.status === 'playing' && this.game?.state.players.some((p) => p.id === targetId);
+    if (inGame && m.socket) throw new GameError(`${m.name} is still here — you can only remove players who left`);
+    if (m.socket) {
+      m.socket.emit('room:removed');
+      (m.socket.data as SockData) = {};
+      m.socket = null;
+    }
+    this.members = this.members.filter((x) => x !== m);
+    if (inGame) {
+      this.act((g) => g.removePlayer(targetId));
+    } else {
+      this.sync([]);
+    }
+  }
+
   leave(m: Member) {
     if (m.socket) (m.socket.data as SockData) = {};
     m.socket = null;
@@ -194,6 +215,7 @@ class Room {
       crazyWindow: w
         ? {
             moveId: w.moveId,
+            kind: w.kind,
             playerId: w.playerId,
             remainingMs: w.closesAt === null ? null : Math.max(0, w.closesAt - Date.now()),
             totalMs: w.closesAt === null ? null : g.state.config.finalCardWindowMs,
@@ -221,6 +243,8 @@ class Room {
     st.wildCooldown = false;
     st.hasDrawn = false;
     st.lastMove = null;
+    st.recent = [];
+    st.suitCalledBy = null;
     st.snap = {};
     for (const p of st.players) if (p.hand.length === 1) st.snap[p.id] = 'open';
     this.after([]);
@@ -331,6 +355,13 @@ export class RoomManager {
       handle(ack, () => {
         const { room, m } = ctx();
         room.leave(m);
+      }),
+    );
+
+    sock.on('room:remove', (a, ack) =>
+      handle(ack, () => {
+        const { room, m } = ctx();
+        room.remove(m.id, String(a?.playerId ?? ''));
       }),
     );
 

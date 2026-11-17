@@ -68,8 +68,15 @@ npm test
 npm run e2e
 ```
 
+Two more browser checks need the server started with `CRAZY_DEBUG=1` (a test-only switch that
+lets the script set up hands; leave it off in production):
+
+- `node scripts/popups.mjs` — screenshots every popup (CRAZY!, LAST!, penalties, win…)
+- `node scripts/features.mjs` — checks the suit bar, swipe-to-drop, combos, sorting, two-row hand,
+  last plays, the CRAZY! label and removing a player
+
 `npm run e2e` needs the server running (`npm start`) and Playwright installed. It plays a whole
-game with 4 phone browsers — including a deliberate mistake caught with CRAZY!, SNAPs and a rematch.
+game with 4 phone browsers — including a deliberate mistake caught with CRAZY!, LAST! calls and a rematch.
 
 ## How it works
 

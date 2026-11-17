@@ -86,27 +86,29 @@ export function describe(e: GameEvent, name: (id: string) => string, me: string)
       if (e.outcome === 'safe') {
         const isMe = e.targetId === me;
         return {
-          text: `${target} called last card`,
+          text: `${target} called LAST!`,
           tone: 'good',
           flash: { title: 'LAST CARD', sub: isMe ? "You're on your last card" : `${target} is on the last card`, tone: 'good' },
         };
       }
       if (e.outcome === 'caught') {
         return {
-          text: `${by} snapped ${obj(e.targetId)} — +4`,
+          text: `${by} caught ${obj(e.targetId)} not calling LAST! — +4`,
           tone: 'bad',
-          flash: { title: 'SNAP!', sub: `${by} caught ${obj(e.targetId)} · +4`, tone: 'bad' },
+          flash: { title: 'CAUGHT!', sub: `${by} caught ${obj(e.targetId)} on the last card · +4`, tone: 'bad' },
         };
       }
       if (e.outcome === 'false') {
         return {
-          text: `${by} snapped too early — +4`,
+          text: `${by} called LAST! too early — +4`,
           tone: 'bad',
           flash: { title: 'TOO EARLY', sub: `${by} +4`, tone: 'bad' },
         };
       }
       return null;
     }
+    case 'removed':
+      return { text: `${e.name} was removed by the host`, tone: 'info' };
     case 'reshuffled':
       return { text: 'Played cards shuffled back in', tone: 'info' };
     default:
