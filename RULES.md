@@ -85,7 +85,7 @@ When someone is down to **1 card**, the **LAST!** button lights up on every phon
 
 - **They hit LAST! first** → safe.
 - **Anyone else hits it first** → they take **+4**.
-- Hitting LAST! when nobody it applies to has exactly 1 card (or too early on yourself) → **you** take +4.
+- Hitting LAST! too early (you or the player you'd catch don't have exactly 1 card) → **you** take +4.
 
 ## 7. Draw pile runs out
 
