@@ -174,6 +174,18 @@ describe('dodging a penalty (auto-caught)', () => {
 });
 
 describe('out of turn', () => {
+  it('before the first card is down, SNAP / CRAZY / passing cost nothing', () => {
+    const g = setup({ hands: [['9S', 'KH'], ['3C', ...PLAIN]] });
+    expect(() => g.snap('p1', 'p1')).toThrow('P0 starts');
+    expect(() => g.snap('p1', 'p0')).toThrow('P0 starts');
+    expect(() => g.pass('p0')).toThrow('You start');
+    g.draw('p0');
+    g.pass('p0'); // drew first: fine
+    expect(() => g.callCrazy('p1')).toThrow('starts');
+    expect(count(g, 'p1')).toBe(PLAIN.length + 1);
+    expect(count(g, 'p0')).toBe(3);
+  });
+
   it('before the first card is down: no penalty, just wait for the starter', () => {
     const g = setup({ hands: [PLAIN, ['9S', ...PLAIN]] });
     expect(() => play(g, 'p1', ['9S'])).toThrow('P0 starts');

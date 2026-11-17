@@ -21,6 +21,10 @@ export function send<E extends keyof Events>(event: E, ...args: ArgsOf<E>): Prom
   });
 }
 
+// Test hook: only does anything on a server started with CRAZY_DEBUG=1.
+(window as unknown as { __crazyRig?: (r: unknown) => Promise<unknown> }).__crazyRig = (r) =>
+  new Promise((res) => (socket as unknown as { emit: (...a: unknown[]) => void }).emit('debug:rig', r, res));
+
 const KEY = 'crazy.session';
 const NAME_KEY = 'crazy.name';
 

@@ -13,6 +13,8 @@ export interface Flight {
   delay: number;
   /** Stays at the destination until removed (waiting for the server). */
   hold?: boolean;
+  /** Shrink and fade on arrival (cards going into your hand). */
+  fade?: boolean;
 }
 
 export function FlyLayer({ flights, onDone }: { flights: Flight[]; onDone: (id: number) => void }) {
@@ -35,9 +37,14 @@ function FlyItem({ f, onDone }: { f: Flight; onDone: (id: number) => void }) {
     const anim = el.animate(
       [
         { transform: at(f.from, f.r0, 0.9), opacity: 0.95 },
-        { transform: at(f.to, f.r1), opacity: 1 },
+        ...(f.fade
+          ? [
+              { transform: at(f.to, f.r1, 0.9), opacity: 1, offset: 0.8 },
+              { transform: at(f.to, f.r1, 0.6), opacity: 0 },
+            ]
+          : [{ transform: at(f.to, f.r1), opacity: 1 }]),
       ],
-      { duration: 340, delay: f.delay, easing: 'cubic-bezier(.2,.8,.25,1)', fill: 'both' },
+      { duration: f.fade ? 420 : 340, delay: f.delay, easing: 'cubic-bezier(.2,.8,.25,1)', fill: 'both' },
     );
     anim.onfinish = () => onDone(f.id);
     return () => anim.cancel();

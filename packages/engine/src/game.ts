@@ -105,7 +105,7 @@ export class CrazyGame {
     // others only learn that this player took +4.
     if (this.current.id !== playerId) {
       // Before the first card is down nobody is punished: just wait for the starter.
-      if (s.discard.length === 0) throw new GameError(`${this.current.name} starts — wait for the first card`);
+      if (s.discard.length === 0) throw new GameError(this.waitMsg());
       this.give(p, s.config.penalty, 'out_of_turn', ev);
       return ev;
     }
@@ -187,6 +187,7 @@ export class CrazyGame {
     this.ensurePlaying();
     const s = this.state;
     if (this.current.id !== playerId) throw new GameError('Not your turn');
+    if (s.discard.length === 0 && !s.hasDrawn) throw new GameError('You start — play any card, or draw first');
     if (s.pendingPenalty > 0) {
       this.dodgedPenalty(this.player(playerId), ev);
       return ev;
@@ -218,6 +219,7 @@ export class CrazyGame {
     const s = this.state;
     const caller = this.player(callerId);
     const m = s.lastMove;
+    if (s.discard.length === 0) throw new GameError(this.waitMsg());
     if (!m) throw new GameError('Nothing to call');
     if (m.playerId === callerId) throw new GameError("You can't call Crazy on yourself");
 
@@ -256,6 +258,7 @@ export class CrazyGame {
     const s = this.state;
     const by = this.player(byId);
     const target = this.player(targetId);
+    if (s.discard.length === 0) throw new GameError(this.waitMsg());
 
     if (target.hand.length !== 1) {
       ev.push({ type: 'snap', byId, targetId, outcome: 'false' });
@@ -359,6 +362,11 @@ export class CrazyGame {
       return matches ? null : 'wrong_match';
     }
     return matches ? null : 'wrong_match';
+  }
+
+  /** Before the first card is down nothing can cost you cards. */
+  private waitMsg() {
+    return `${this.current.name} starts — wait for the first card`;
   }
 
   private changesSuit(chosenSuit?: Suit) {

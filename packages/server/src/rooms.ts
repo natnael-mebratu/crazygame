@@ -1,10 +1,19 @@
 import { randomBytes } from 'node:crypto';
 import type { Server, Socket } from 'socket.io';
+
+interface Rig {
+  hands?: string[][];
+  top?: string | null;
+  active?: Suit;
+  turn?: number;
+  pending?: number;
+}
 import {
   CrazyGame,
   GameError,
   SUITS,
   type AckResult,
+  type Card,
   type ClientToServerEvents,
   type ClientView,
   type GameEvent,
@@ -193,6 +202,30 @@ class Room {
     };
   }
 
+  /** Test-only (CRAZY_DEBUG=1): set hands by seat, top card, whose turn, pending penalty. */
+  rig(a: Rig) {
+    const g = this.game;
+    if (!g) throw new GameError('No game');
+    let n = 0;
+    const mk = (l: string) => ({ id: `${l}~rig${n++}`, suit: l.slice(-1) as Suit, rank: l.slice(0, -1) as Card['rank'] });
+    const st = g.state;
+    a.hands?.forEach((h, i) => {
+      if (st.players[i]) st.players[i].hand = h.map(mk);
+    });
+    if (a.top !== undefined) {
+      st.discard = a.top ? [mk(a.top)] : [];
+      st.activeSuit = a.top ? (a.active ?? (a.top.slice(-1) as Suit)) : null;
+    }
+    if (a.turn !== undefined) st.turn = a.turn;
+    st.pendingPenalty = a.pending ?? 0;
+    st.wildCooldown = false;
+    st.hasDrawn = false;
+    st.lastMove = null;
+    st.snap = {};
+    for (const p of st.players) if (p.hand.length === 1) st.snap[p.id] = 'open';
+    this.after([]);
+  }
+
   dispose() {
     clearTimeout(this.windowTimer);
     clearTimeout(this.afkTimer);
@@ -330,6 +363,16 @@ export class RoomManager {
         room.act((g, now) => g.snap(m.id, String(a?.targetId ?? ''), now));
       }),
     );
+
+    // Test-only: rig hands/table to reach specific situations. Off unless CRAZY_DEBUG=1.
+    if (process.env.CRAZY_DEBUG === '1') {
+      (sock as unknown as Socket).on('debug:rig', (a: Rig, ack: unknown) =>
+        handle(ack, () => {
+          const { room } = ctx();
+          room.rig(a);
+        }),
+      );
+    }
 
     sock.on('disconnect', () => {
       const d = sock.data as SockData;

@@ -3,6 +3,13 @@ import { isWild, type AckResult, type Card, type ClientView, type RoomState, typ
 import type { EventBatch } from '../App';
 import { buzz, send } from '../net';
 import { describe, type Tone } from '../describe';
+
+interface Stamp {
+  id: number;
+  title: string;
+  sub: string;
+  tone: Tone;
+}
 import { CardBack, SUIT_NAME, SYM, isRed, label, sortHand, tilt } from './Cards';
 import { DiscardPile } from './DiscardPile';
 import { FlyLayer, type Flight } from './FlyLayer';
@@ -46,7 +53,10 @@ export function Table({ room, view, batch, onLeave }: Props) {
   const [sel, setSel] = useState<string[]>([]);
   const [picker, setPicker] = useState<string[] | null>(null);
   const [feed, setFeed] = useState<{ id: number; text: string; tone: Tone }[]>([]);
-  const [flash, setFlash] = useState<{ id: number; title: string; sub: string; tone: Tone } | null>(null);
+  // Big stamps play one after another, never on top of each other.
+  const [stamps, setStamps] = useState<Stamp[]>([]);
+  const pushStamp = (st: Omit<Stamp, 'id'>) => setStamps((q) => [...q.slice(-2), { id: ++seq.current, ...st }]);
+  const flash = stamps[0] ?? null;
   const [flights, setFlights] = useState<Flight[]>([]);
   const [error, setError] = useState<{ id: number; text: string } | null>(null);
   const [lastPlayer, setLastPlayer] = useState<string | null>(null);
@@ -83,8 +93,7 @@ export function Table({ room, view, batch, onLeave }: Props) {
       setSel([]);
       const starter = view.turnPlayerId;
       const first = nameOf(starter).split(' ')[0];
-      setFlash({
-        id: ++seq.current,
+      pushStamp({
         title: starter === me ? 'You start!' : `${first} starts`,
         sub: starter === me ? 'Play any card' : 'Wait for the first card',
         tone: 'good',
@@ -103,14 +112,14 @@ export function Table({ room, view, batch, onLeave }: Props) {
     seenSeq.current = batch.seq;
     const lines: { id: number; text: string; tone: Tone }[] = [];
     const fl: Flight[] = [];
-    let stamp: typeof flash = null;
+    const newStamps: Omit<Stamp, 'id'>[] = [];
     const pileW = (pileEl('discard') as HTMLElement | null)?.offsetWidth ?? 64;
 
     for (const e of batch.events) {
       const d = describe(e, nameOf, me);
       if (d) {
-        lines.push({ id: ++seq.current, text: d.text, tone: d.tone });
-        if (d.flash) stamp = { id: seq.current, ...d.flash };
+        if (d.text) lines.push({ id: ++seq.current, text: d.text, tone: d.tone });
+        if (d.flash) newStamps.push(d.flash);
         if (d.mine) buzz([70, 40, 70]);
       }
       if (e.type === 'played') {
@@ -133,21 +142,24 @@ export function Table({ room, view, batch, onLeave }: Props) {
         const to = center(seatEl(e.playerId));
         if (from && to) {
           for (let i = 0; i < Math.min(e.count, 6); i++) {
-            fl.push({ id: ++seq.current, from, to, w: e.playerId === me ? pileW : 32, r0: 0, r1: tilt(String(i), 12), delay: i * 70 });
+            const mine = e.playerId === me;
+            fl.push({ id: ++seq.current, from, to: mine ? handTarget() ?? to : to, w: mine ? pileW * 0.8 : 32, r0: 0, r1: tilt(String(i), 12), delay: i * 70, fade: mine });
           }
         }
       }
     }
     if (lines.length) setFeed((f) => [...lines.reverse(), ...f].slice(0, 3));
-    if (stamp) setFlash(stamp);
+    newStamps.forEach(pushStamp);
     if (fl.length) setFlights((f) => [...f, ...fl]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [batch.seq]);
 
   useEffect(() => {
     if (!flash) return;
-    const t = setTimeout(() => setFlash(null), 1600);
+    // Shorter when another stamp is waiting, so the table never falls behind.
+    const t = setTimeout(() => setStamps((q) => q.slice(1)), stamps.length > 1 ? 1100 : 1700);
     return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flash?.id]);
 
   useEffect(() => {
@@ -160,6 +172,14 @@ export function Table({ room, view, batch, onLeave }: Props) {
     const r = await p;
     if (!r.ok) setError({ id: ++seq.current, text: r.error });
     return r;
+  };
+
+  /** Cards drawn by you fly into the top of your hand (not over the buttons). */
+  const handTarget = () => {
+    const el = seatEl(me);
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height * 0.55 };
   };
 
   const pileW = () => (pileEl('discard') as HTMLElement | null)?.offsetWidth ?? 64;
@@ -202,12 +222,12 @@ export function Table({ room, view, batch, onLeave }: Props) {
     if (myTurn && (pending > 0 || !view.hasDrawn)) {
       const n = Math.min(pending > 0 ? pending : 1, 6);
       const from = center(pileEl('draw'));
-      const to = center(seatEl(me));
+      const to = handTarget();
       if (from && to) {
-        const w = pileW();
+        const w = pileW() * 0.8;
         setFlights((f) => [
           ...f,
-          ...Array.from({ length: n }, (_, i) => ({ id: ++seq.current, from, to, w, r0: 0, r1: tilt(String(i), 12), delay: i * 70 })),
+          ...Array.from({ length: n }, (_, i) => ({ id: ++seq.current, from, to, w, r0: 0, r1: tilt(String(i), 12), delay: i * 70, fade: true })),
         ]);
         drawFlown.current = n;
       }
@@ -426,7 +446,7 @@ export function Table({ room, view, batch, onLeave }: Props) {
 
       {flash && (
         <div key={flash.id} className={`stamp ${flash.tone}`} role="status">
-          <strong className={flash.title.length > 11 ? 'long' : ''}>{flash.title}</strong>
+          <strong>{flash.title}</strong>
           <span>{flash.sub}</span>
         </div>
       )}

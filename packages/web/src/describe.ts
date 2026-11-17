@@ -21,6 +21,8 @@ const FOUL_TEXT: Record<Foul, string> = {
 };
 
 export function describe(e: GameEvent, name: (id: string) => string, me: string): Described | null {
+  /** "you" in the middle of a sentence, a name otherwise. */
+  const obj = (id: string) => (id === me ? 'you' : name(id));
   switch (e.type) {
     case 'played': {
       const who = name(e.playerId);
@@ -37,33 +39,26 @@ export function describe(e: GameEvent, name: (id: string) => string, me: string)
           return { text: `${who} drew a card`, tone: 'info' };
         case 'penalty':
           return { text: `${who} took +${e.count}`, tone: 'bad', mine };
-        case 'crazy':
-          return { text: `${who} +${e.count} — caught!`, tone: 'bad', mine };
         case 'out_of_turn':
           return {
-            text: `${who} +${e.count} — out of turn`,
+            text: `${who} +${e.count} — played out of turn`,
             tone: 'bad',
             mine,
             flash: { title: 'OUT OF TURN', sub: `${who} +${e.count}`, tone: 'bad' },
           };
         case 'dodged_penalty':
           return {
-            text: `${who} +${e.count} — no dodging`,
+            text: `${who} +${e.count} — no dodging a penalty`,
             tone: 'bad',
             mine,
             flash: { title: 'CRAZY!', sub: `${who} +${e.count} — no dodging`, tone: 'bad' },
           };
+        // These follow a Crazy / SNAP event that already says it all.
+        case 'crazy':
         case 'false_call':
-          return { text: `${who} +${e.count} — wrong call`, tone: 'bad', mine };
         case 'snap_caught':
-          return { text: `${who} +${e.count} — snapped`, tone: 'bad', mine };
         case 'false_snap':
-          return {
-            text: `${who} +${e.count} — false snap`,
-            tone: 'bad',
-            mine,
-            flash: { title: 'FALSE SNAP', sub: `${who} +${e.count}`, tone: 'bad' },
-          };
+          return mine ? { text: '', tone: 'bad', mine } : null;
       }
       return null;
     }
@@ -71,33 +66,47 @@ export function describe(e: GameEvent, name: (id: string) => string, me: string)
       return { text: `${name(e.playerId)} passed`, tone: 'info' };
     case 'crazy': {
       const caller = name(e.callerId);
-      const target = name(e.targetId);
-      return e.correct
-        ? {
-            text: `${caller} caught ${target}: ${FOUL_TEXT[e.foul!]}`,
-            tone: 'bad',
-            flash: { title: 'CRAZY!', sub: `${caller} caught ${target} — ${FOUL_TEXT[e.foul!]}`, tone: 'bad' },
-          }
-        : {
-            text: `${caller} called Crazy — wrong!`,
-            tone: 'bad',
-            flash: { title: 'WRONG CALL', sub: `${caller} +4`, tone: 'bad' },
-          };
-    }
-    case 'snap':
-      if (e.outcome === 'safe')
+      if (!e.correct) {
         return {
-          text: `${name(e.targetId)} snapped — safe`,
-          tone: 'good',
-          flash: { title: 'SNAP!', sub: `${name(e.targetId)} is on the last card`, tone: 'good' },
-        };
-      if (e.outcome === 'caught')
-        return {
-          text: `${name(e.byId)} snapped ${name(e.targetId)}!`,
+          text: `${caller} called Crazy on a good card — +4`,
           tone: 'bad',
-          flash: { title: 'SNAP!', sub: `${name(e.byId)} caught ${name(e.targetId)}`, tone: 'bad' },
+          flash: { title: 'WRONG CALL', sub: `${caller} +4`, tone: 'bad' },
         };
+      }
+      const why = FOUL_TEXT[e.foul!];
+      return {
+        text: `${caller} caught ${obj(e.targetId)}: ${why} — +4`,
+        tone: 'bad',
+        flash: { title: 'CRAZY!', sub: `${caller} caught ${obj(e.targetId)} · ${why} · +4`, tone: 'bad' },
+      };
+    }
+    case 'snap': {
+      const by = name(e.byId);
+      const target = name(e.targetId);
+      if (e.outcome === 'safe') {
+        const isMe = e.targetId === me;
+        return {
+          text: `${target} called last card`,
+          tone: 'good',
+          flash: { title: 'LAST CARD', sub: isMe ? "You're on your last card" : `${target} is on the last card`, tone: 'good' },
+        };
+      }
+      if (e.outcome === 'caught') {
+        return {
+          text: `${by} snapped ${obj(e.targetId)} — +4`,
+          tone: 'bad',
+          flash: { title: 'SNAP!', sub: `${by} caught ${obj(e.targetId)} · +4`, tone: 'bad' },
+        };
+      }
+      if (e.outcome === 'false') {
+        return {
+          text: `${by} snapped too early — +4`,
+          tone: 'bad',
+          flash: { title: 'TOO EARLY', sub: `${by} +4`, tone: 'bad' },
+        };
+      }
       return null;
+    }
     case 'reshuffled':
       return { text: 'Played cards shuffled back in', tone: 'info' };
     default:
